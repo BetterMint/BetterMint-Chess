@@ -1,13 +1,13 @@
 <p align="center">
   <img width="600" src="https://i.ibb.co/6Pz1c3B/1-background.png">
   <br><br>
-  <a href="https://discord.com/servers/bettermint-development-1098267851732815932"><img alt="BetterMint Discord" src="https://img.shields.io/badge/Discord-BetterMint-0?style=flat&logo=discord"></a>
-  <a href="https://github.com/BotSolvers/BetterMint/releases/"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BotSolvers/BetterMint/total?color=%2331c754&label=Downloads"></a>
+  <a href="https://discord.com/servers/bettermint-reverse-engineering-1098267851732815932"><img alt="BetterMint Discord" src="https://img.shields.io/badge/Discord-BetterMint-0?style=flat&logo=discord"></a>
+  <a href="https://github.com/BetterMint/BetterMint/releases/"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BetterMint/BetterMint/total?color=%2331c754&label=Downloads"></a>
 </p>
 
-<h1 align="center">👑 BetterMint V2: Your Chess.com Companion! ♟️</h1>
+<h1 align="center">👑 BetterMint: Your Chess.com Companion! ♟️</h1>
 
-<p align="center">Welcome to BetterMint V2, the ultimate chess.com extension designed to elevate your game! Remember, true chess mastery comes from practice and learning, not shortcuts.</p>
+<p align="center">Welcome to BetterMint, the ultimate chess.com extension designed to elevate your game! Remember, true chess mastery comes from practice and learning, not shortcuts.</p>
 
 <h2 align="center">🚀 Getting Started</h2>
 
@@ -16,11 +16,7 @@
 <h3 align="center">1. Download and Install</h3>
 
 <p align="center">
-  - <strong>We are on the Chrome Webstore again!</strong>: <a href="https://chromewebstore.google.com/detail/mint-v2/hjpjlhjhmbnpokpgdhpncefmchlonmhj?authuser=0&hl=en">Mint V2.</a>
-</p>
-
-<p align="center">
-  - <strong>Download the latest version of BetterMint V2</strong>: <a href="https://github.com/BotSolvers/BetterMint/releases/">BetterMint V2.zip</a>
+  - <strong>Download the latest version of BetterMint</strong>: <a href="https://github.com/BetterMint/BetterMint/releases/">BetterMint.zip</a>
 </p>
 <p align="center">
   - <strong>Download and install Python 3.12.3</strong>: <a href="https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe">Python Installer</a>. Make sure to check the box that says "Add Python to PATH".
@@ -43,7 +39,7 @@
   - <strong>Enable Developer Mode</strong>: Toggle the switch in the top right corner.
 </p>
 <p align="center">
-  - <strong>Load the BetterMint V2 Extension</strong>: Click <code>Load unpacked</code> and select the extracted BetterMint V2 folder.
+  - <strong>Load the BetterMint Extension</strong>: Click <code>Load unpacked</code> and select the extracted BetterMint V2 folder.
 </p>
 
 <h3 align="center">3. Configure the Engine</h3>
