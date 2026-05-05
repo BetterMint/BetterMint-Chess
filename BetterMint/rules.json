@@ -1,0 +1,55 @@
+[
+    {
+        "id": 1,
+        "priority": 1,
+        "action": {
+            "type": "modifyHeaders",
+            "responseHeaders": [
+                {
+                    "header": "Cross-Origin-Embedder-Policy",
+                    "operation": "set",
+                    "value": "require-corp"
+                },
+                {
+                    "header": "Cross-Origin-Opener-Policy",
+                    "operation": "set",
+                    "value": "same-origin"
+                }
+            ]
+        },
+        "condition": {
+            "urlFilter": "|http*",
+            "resourceTypes": [
+                "script",
+                "main_frame",
+                "sub_frame"
+            ]
+        }
+    },
+    {
+        "id": 2,
+        "priority": 2,
+        "action": {
+            "type": "block"
+        },
+        "condition": {
+            "urlFilter": "|https://www.chess.com/service/fair-play/chesscom.fair_play.v2.FairPlayService/",
+            "resourceTypes": [
+                "xmlhttprequest"
+            ]
+        }
+    },
+    {
+        "id": 3,
+        "priority": 3,
+        "action": {
+            "type": "block"
+        },
+        "condition": {
+            "urlFilter": "|https://www.chess.com/chesscom-artifacts/packages/@chesscom/play-client/113.0.0/play-monitor-browser-extensions.chunk.client.*.js",
+            "resourceTypes": [
+                "script"
+            ]
+        }
+    }
+]

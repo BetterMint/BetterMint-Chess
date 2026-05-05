@@ -1,0 +1,7 @@
+fastapi
+tk
+asyncio
+uvicorn
+uvicorn[standard]
+psutil
+requests

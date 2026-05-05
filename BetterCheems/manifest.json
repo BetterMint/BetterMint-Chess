@@ -1,0 +1,58 @@
+{
+    "name": "BetterCheems",
+    "manifest_version": 3,
+    "icons": {
+        "128": "128.png"
+    },
+    "background": {
+        "service_worker": "background-wrapper.js"
+    },
+    "content_scripts": [
+        {
+            "run_at": "document_idle",
+            "matches": [
+                "https://*.chess.com/*"
+            ],
+            "js": [
+                "hookInjector.bundle.js"
+            ]
+        },
+        {
+            "run_at": "document_idle",
+            "matches": [
+                "https://*.chess.com/*"
+            ],
+            "js": [
+                "contentApp.bundle.js",
+                "hookUpdater.bundle.js"
+            ]
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'"
+    },
+    "action": {
+        "default_title": "Click to show options"
+    },
+    "permissions": [
+        "storage",
+        "declarativeNetRequest",
+        "declarativeNetRequestFeedback"
+    ],
+    "devtools_page": "pages/devtools.html",
+    "options_page": "pages/options.html",
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "description": "Online chess assistant",
+    "version": "1.0.0",
+    "declarative_net_request": {
+        "rule_resources": [
+            {
+                "id": "rules",
+                "enabled": true,
+                "path": "rules.json"
+            }
+        ]
+    }
+}
