@@ -1,0 +1,10 @@
+lfs filter=lfs diff=lfs merge=lfs -text
+track filter=lfs diff=lfs merge=lfs -text
+EngineWS/engines/stockfish-windows-x86-64.zipgit filter=lfs diff=lfs merge=lfs -text
+EngineWS/engines/stockfish-avx2/stockfish/stockfish-windows-x86-64-avx2.exegit filter=lfs diff=lfs merge=lfs -text
+EngineWS/engines/stockfish-x64/stockfish/stockfish-windows-x86-64.exe filter=lfs diff=lfs merge=lfs -text
+BetterMint/js/vendor/stockfish18/nn-71d6d32cb962.nnuegit filter=lfs diff=lfs merge=lfs -text
+/BetterMint/BetterMint.zip filter=lfs diff=lfs merge=lfs -text
+/BetterMint/js/vendor/stockfish18/nn-71d6d32cb962.nnue filter=lfs diff=lfs merge=lfs -text
+/EngineWS/engines/stockfish-avx2/stockfish/stockfish-windows-x86-64-avx2.exe filter=lfs diff=lfs merge=lfs -text
+/EngineWS/engines/stockfish-windows-x86-64.zip filter=lfs diff=lfs merge=lfs -text

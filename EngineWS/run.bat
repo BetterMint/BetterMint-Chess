@@ -1,23 +1,19 @@
 @echo off
 cd /d "%~dp0"
+title BetterMint EngineWS v2.0
 
-echo Uninstalling existing version of my_main_manager...
-python -m pip uninstall -y my_main_manager
-
-:: Install dependencies from requirements.txt
-echo Installing dependencies from requirements.txt...
-python -m pip install -r requirements.txt
+echo Installing dependencies...
+python -m pip install -q -r requirements.txt
 if %ERRORLEVEL% neq 0 (
     echo Failed to install dependencies. Exiting.
     pause
     exit /b
 )
 
-:: Run the application
-echo Starting application...
-python -m uvicorn main:app --reload
+echo Starting EngineWS...
+python main.py
 if %ERRORLEVEL% neq 0 (
-    echo Failed to start the application. Exiting.
+    echo EngineWS exited with an error.
     pause
     exit /b
 )

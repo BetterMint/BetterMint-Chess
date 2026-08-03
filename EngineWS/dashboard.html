@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BetterMint EngineWS</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --accent: #4ade80; --accent2: #38bdf8; --text: #e6edf3; --dim: #8b949e;
+    --danger: #f87171; --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+  h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .card h2 { font-size: 14px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .engine { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .engine .row1 { display: flex; align-items: center; gap: 10px; }
+  .engine .name { font-weight: 600; font-size: 15px; flex: 1; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .badge.alive { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .badge.dead { background: rgba(248,113,113,0.15); color: var(--danger); }
+  .badge.off { background: rgba(148,163,184,0.15); color: var(--dim); }
+  .engine.off { opacity: 0.55; }
+  .badge.busy { background: rgba(56,189,248,0.15); color: var(--accent2); }
+  .badge.prio { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .engine .meta { font-size: 12px; color: var(--dim); margin-top: 6px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .engine .actions { margin-top: 8px; display: flex; gap: 6px; }
+  button { background: var(--border); color: var(--text); border: none; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: 0.15s; }
+  button:hover { background: #3d444d; }
+  button.primary { background: var(--accent2); color: #062032; font-weight: 600; }
+  button.primary:hover { background: #7dd3fc; }
+  button.danger { background: rgba(248,113,113,0.15); color: var(--danger); }
+  button.danger:hover { background: rgba(248,113,113,0.3); }
+  .prio-controls { display: flex; gap: 4px; }
+  .prio-controls button { padding: 2px 8px; font-size: 13px; }
+  #log { height: 280px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 11px; line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  #log .line-info { color: var(--dim); }
+  #log .line-bestmove { color: var(--accent); font-weight: 600; }
+  #log .line-error { color: var(--danger); }
+  #log .eng { color: var(--accent2); }
+  .stat { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .stat:last-child { border-bottom: none; }
+  .stat .v { font-weight: 600; font-family: monospace; }
+  .dl-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .dl-item:last-child { border-bottom: none; }
+  .dl-item .repo { color: var(--dim); font-size: 11px; }
+  #toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel); border: 1px solid var(--accent); color: var(--text); padding: 10px 16px; border-radius: 8px; font-size: 13px; display: none; z-index: 99; }
+</style>
+</head>
+<body>
+<h1><span class="dot" id="ws-dot"></span> BetterMint EngineWS <span style="font-size:13px;color:var(--dim);font-weight:400">v3.0</span></h1>
+<div class="sub">Local multi-engine UCI server &bull; <span id="client-count">0</span> client(s) connected</div>
+
+<div class="grid">
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Engines (priority order)</h2>
+      <div id="engines"></div>
+    </div>
+    <div class="card">
+      <h2>Engine Output</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+  <div>
+    <div class="card" style="margin-bottom:16px">
+      <h2>Server</h2>
+      <div class="stat"><span>WebSocket</span><span class="v" id="ws-status">connecting…</span></div>
+      <div class="stat"><span>Endpoint</span><span class="v">ws://127.0.0.1:8000/ws</span></div>
+      <div class="stat"><span>Alive engines</span><span class="v" id="alive-count">0</span></div>
+    </div>
+    <div class="card">
+      <h2>Download Engines</h2>
+      <div id="downloadable">loading…</div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const log = document.getElementById('log');
+const enginesEl = document.getElementById('engines');
+let engineList = [];
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function addLog(engine, text, cls = 'line-info') {
+  const div = document.createElement('div');
+  div.className = cls;
+  div.innerHTML = `<span class="eng">[${engine}]</span> ${text.replace(/</g,'&lt;')}`;
+  log.appendChild(div);
+  while (log.children.length > 500) log.removeChild(log.firstChild);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderEngines() {
+  enginesEl.innerHTML = '';
+  document.getElementById('alive-count').textContent = engineList.filter(e => e.alive).length;
+  // a disabled engine is still configured, so it stays listed rather than
+  // disappearing with no way to switch it back on
+  if (!engineList.length) {
+    enginesEl.innerHTML = '<div style="color:var(--dim);font-size:13px">No engines configured. Download one on the right.</div>';
+    return;
+  }
+  engineList.forEach((e, i) => {
+    const div = document.createElement('div');
+    div.className = 'engine' + (e.enabled ? '' : ' off');
+    div.innerHTML = `
+      <div class="row1">
+        <span class="name">${e.name}</span>
+        <span class="badge prio">P${e.priority}</span>
+        ${e.enabled
+          ? (e.alive ? '<span class="badge alive">alive</span>' : '<span class="badge dead">dead</span>')
+          : '<span class="badge off">disabled</span>'}
+        ${e.busy ? '<span class="badge busy">thinking</span>' : ''}
+      </div>
+      <div class="meta">
+        <span>eval: <b>${e.last_eval !== null ? e.last_eval.toFixed(2) : '—'}</b></span>
+        <span>best: <b>${e.last_bestmove || '—'}</b></span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%">${e.path}</span>
+      </div>
+      <div class="actions">
+        <div class="prio-controls">
+          <button onclick="movePrio(${i},-1)" title="Higher priority (gives best move)">▲</button>
+          <button onclick="movePrio(${i},1)" title="Lower priority">▼</button>
+        </div>
+        <button onclick="api('/api/engine/${e.name}/toggle','POST')">${e.enabled ? 'Disable' : 'Enable'}</button>
+        <button onclick="api('/api/engine/${e.name}/restart','POST')">Restart</button>
+        <button class="danger" onclick="if(confirm('Remove ${e.name}?')) api('/api/engine/${e.name}/remove','POST')">Remove</button>
+      </div>`;
+    enginesEl.appendChild(div);
+  });
+}
+
+function movePrio(idx, dir) {
+  const order = engineList.map(e => e.name);
+  const j = idx + dir;
+  if (j < 0 || j >= order.length) return;
+  [order[idx], order[j]] = [order[j], order[idx]];
+  ws.send(JSON.stringify({ action: 'set_priority', order }));
+}
+
+// the server injects window.BM_TOKEN into this page, so the dashboard can
+// authenticate itself while an outside page cannot
+const TOKEN = window.BM_TOKEN || '';
+
+async function api(path, method = 'GET') {
+  try {
+    const r = await fetch(path, { method, headers: TOKEN ? { 'x-bm-token': TOKEN } : {} });
+    const data = await r.json();
+    if (data.ok === false) toast('Error: ' + (data.error || 'failed'));
+    return data;
+  } catch (e) { toast('Request failed'); }
+}
+
+async function loadDownloadable() {
+  const data = await api('/api/downloadable');
+  const el = document.getElementById('downloadable');
+  if (!data || !data.engines) { el.textContent = 'failed to load'; return; }
+  el.innerHTML = '';
+  data.engines.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'dl-item';
+    div.innerHTML = `<div>${e.choices[0]}<div class="repo">${e.repo}</div></div>`;
+    const btn = document.createElement('button');
+    btn.className = 'primary'; btn.textContent = 'Download';
+    btn.onclick = async () => {
+      btn.textContent = '…'; btn.disabled = true;
+      const res = await api('/api/download/' + e.key, 'POST');
+      btn.textContent = 'Download'; btn.disabled = false;
+      toast(res && res.ok ? `Installed ${res.display}` : 'Download failed');
+    };
+    div.appendChild(btn);
+    el.appendChild(div);
+  });
+}
+
+function setClientCount(n) {
+  const el = document.getElementById('client-count');
+  if (el) el.textContent = n;
+}
+
+let ws;
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws' + (TOKEN ? '?token=' + encodeURIComponent(TOKEN) : ''));
+  ws.onopen = () => {
+    document.getElementById('ws-status').textContent = 'connected';
+    document.getElementById('ws-status').style.color = 'var(--accent)';
+    document.getElementById('ws-dot').style.background = 'var(--accent)';
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-status').textContent = 'reconnecting…';
+    document.getElementById('ws-status').style.color = 'var(--warn)';
+    document.getElementById('ws-dot').style.background = 'var(--warn)';
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'engines') {
+      engineList = msg.engines;
+      if (typeof msg.clients === 'number') setClientCount(msg.clients);
+      renderEngines();
+    } else if (msg.type === 'clients') {
+      setClientCount(msg.count);
+    } else if (msg.type === 'bestmove') {
+      addLog(msg.engine, `bestmove ${msg.move}`, 'line-bestmove');
+      const e = engineList.find(x => x.name === msg.engine);
+      if (e) { e.last_bestmove = msg.move; e.busy = false; renderEngines(); }
+    } else if (msg.type === 'info' && msg.parsed && msg.parsed.depth) {
+      const p = msg.parsed;
+      const score = p.score_mate !== undefined ? `M${p.score_mate}` : (p.score_cp !== undefined ? (p.score_cp/100).toFixed(2) : '?');
+      addLog(msg.engine, `d${p.depth} mpv${p.multipv||1} ${score} ${p.pv ? p.pv.slice(0,4).join(' ') : ''}`);
+      const e = engineList.find(x => x.name === msg.engine);
+      if (e) { e.last_eval = p.score_cp !== undefined ? p.score_cp/100 : e.last_eval; e.busy = true; }
+    } else if (msg.type === 'error' || msg.type === 'engine_died') {
+      addLog(msg.engine || 'server', msg.message || 'error', 'line-error');
+    } else if (msg.type === 'engine_restarted') {
+      addLog(msg.engine, 'restarted');
+      ws.send(JSON.stringify({ action: 'list_engines' }));
+    }
+  };
+}
+
+connect();
+loadDownloadable();
+setInterval(() => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ action: 'list_engines' })); }, 5000);
+</script>
+</body>
+</html>

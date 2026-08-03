@@ -1,0 +1,24 @@
+# --- local machine state, never publish ---
+# config.json holds this install's EngineWS access token and whichever engines
+# the user turned on. config.default.json is the shipped template instead.
+EngineWS/config.json
+EngineWS/__pycache__/
+__pycache__/
+*.py[cod]
+
+# --- broken Git LFS pointer stubs ---
+# these were committed through LFS and never fetched, so on disk they are
+# ~133 byte text files rather than real books. Convert or re-download them
+# before adding them back.
+
+# --- tooling / scratch ---
+node_modules/
+.pw-profile/
+.playwright-mcp/
+old bettermint project/
+package-lock.json
+test-e2e.mjs
+progress.txt
+*.log
+.DS_Store
+Thumbs.db

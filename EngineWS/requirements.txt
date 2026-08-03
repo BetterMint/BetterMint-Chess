@@ -1,7 +1,6 @@
-fastapi
-tk
-asyncio
-uvicorn
-uvicorn[standard]
-psutil
-requests
+fastapi>=0.110
+uvicorn[standard]>=0.29
+# book_service reads polyglot books and probes syzygy/gaviota tablebases
+# through python-chess; without it every book and tablebase silently reports
+# itself unavailable
+chess>=1.10

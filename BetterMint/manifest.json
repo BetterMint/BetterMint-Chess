@@ -1,63 +1,76 @@
 {
-    "manifest_version": 3,
-    "name": "Mint V2.0 - Chess",
-    "short_name": "Mint V2.0 - Chess",
-    "icons": {
-        "16": "img/logo-16.png",
-        "48": "img/logo-48.png",
-        "128": "img/logo-128.png"
-    },
-    "version": "2.0.5",
-    "description": "Mint is a tool that helps you get better at chess.",
-    "permissions": [
-        "storage",
-        "declarativeNetRequest"
-    ],
-    "host_permissions": [
-        "http://*.chess.com/*",
-        "https://*.chess.com/*"
-    ],
-    "content_scripts": [
-        {
-            "js": [
-                "js/loader.js"
-            ],
-            "css": [
-                "css/depthbar.css",
-                "css/evalbar.css",
-                "css/material-icon.css"
-            ],
-            "matches": [
-                "https://*.chess.com/*"
-            ],
-            "run_at": "document_start"
-        }
-    ],
-    "declarative_net_request": {
-        "rule_resources": [
-            {
-                "id": "ruleset_1",
-                "enabled": true,
-                "path": "rules.json"
-            }
-        ]
-    },
-    "action": {
-        "default_popup": "html/options.html"
-    },
-    "web_accessible_resources": [
-        {
-            "resources": [
-                "js/Mint.js",
-                "html/options.html"
-            ],
-            "matches": [
-                "https://*.chess.com/*"
-            ]
-        }
-    ],
-    "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self';",
-        "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  "manifest_version": 3,
+  "name": "BetterMint",
+  "short_name": "BetterMint",
+  "version": "3.0.0",
+  "description": "Universal chess analysis companion with multi-engine support, opening books, tablebases, humanization and Lua scripting.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "webNavigation",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
+  },
+  "background": {
+    "service_worker": "js/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "js/content-script.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "html/engine-host.html",
+        "img/logo-48.png"
+      ],
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ],
+  "options_page": "html/options.html",
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "action": {
+    "default_icon": {
+      "16": "img/logo-16.png",
+      "48": "img/logo-48.png",
+      "128": "img/logo-128.png"
+    }
+  },
+  "icons": {
+    "16": "img/logo-16.png",
+    "48": "img/logo-48.png",
+    "128": "img/logo-128.png"
+  }
 }

@@ -1,0 +1,95 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "max_clients": 8
+  },
+  "engines": [
+    {
+      "name": "stockfish",
+      "display": "Stockfish 13",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\stockfish_13_win_x64_avx2.exe",
+      "priority": 1,
+      "enabled": true,
+      "options": {
+        "Threads": 4,
+        "Hash": 256
+      },
+      "skill_level": null,
+      "uci_elo": null,
+      "nodes_limit": null,
+      "depth_cap": null
+    },
+    {
+      "name": "shredder",
+      "display": "Deep Shredder 13",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\EngineDeepShredder13UCI.exe",
+      "priority": 2,
+      "enabled": false,
+      "options": {},
+      "skill_level": null,
+      "uci_elo": null,
+      "nodes_limit": null,
+      "depth_cap": null
+    },
+    {
+      "name": "opental",
+      "display": "OpenTal (x64 popcnt)",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\opental_x64popcnt.exe",
+      "priority": 3,
+      "enabled": false,
+      "options": {},
+      "skill_level": null,
+      "uci_elo": null,
+      "nodes_limit": null,
+      "depth_cap": null
+    },
+    {
+      "name": "safrad",
+      "display": "Safrad SDG 2.2",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\safrad_2.2.exe",
+      "priority": 4,
+      "enabled": false,
+      "options": {},
+      "skill_level": null,
+      "uci_elo": null,
+      "nodes_limit": 4000000,
+      "depth_cap": 8
+    }
+  ],
+  "books": [
+    {
+      "name": "gm2001",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\bin\\gm2001.bin",
+      "stage": "opening",
+      "format": "polyglot",
+      "weight": 1.0,
+      "max_ply": 20
+    },
+    {
+      "name": "komodo",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\bin\\komodo.bin",
+      "stage": "opening",
+      "format": "polyglot",
+      "weight": 1.0,
+      "max_ply": 24
+    },
+    {
+      "name": "ph-tal2",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\books\\ph-tal2.bin",
+      "stage": "opening",
+      "format": "polyglot",
+      "weight": 1.0,
+      "max_ply": 20
+    },
+    {
+      "name": "rodent",
+      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\books\\Rodent.bin",
+      "stage": "opening",
+      "format": "polyglot",
+      "weight": 1.0,
+      "max_ply": 24
+    }
+  ],
+  "tablebases": []
+}

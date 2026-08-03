@@ -1,92 +1,164 @@
-<p align="center">
-  <img width="600" src="https://i.ibb.co/6Pz1c3B/1-background.png">
-  <br><br>
-  <a href="https://discord.com/servers/bettermint-reverse-engineering-1098267851732815932"><img alt="BetterMint Discord" src="https://img.shields.io/badge/Discord-BetterMint-0?style=flat&logo=discord"></a>
-  <a href="https://github.com/BetterMint/BetterMint/releases/"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BetterMint/BetterMint/total?color=%2331c754&label=Downloads"></a>
-</p>
+<div align="center">
 
-<h1 align="center">👑 BetterMint: Your Chess.com Companion! ♟️</h1>
+# BetterMint
 
-<p align="center">Welcome to BetterMint, the ultimate chess.com extension designed to elevate your game! Remember, true chess mastery comes from practice and learning, not shortcuts.</p>
+**A universal chess analysis companion — multi-engine, book-aware, tablebase-backed, and undetectable by design.**
 
-<h2 align="center">🚀 Getting Started</h2>
+[![Discord](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/bettermint)
+[![Version](https://img.shields.io/badge/version-3.0.0-7a5cff?style=for-the-badge)](#)
+[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
 
-<p align="center">Follow these steps to unlock the magic of BetterMint V2:</p>
+</div>
 
-<h3 align="center">1. Download and Install</h3>
+---
 
-<p align="center">
-  - <strong>Download the latest version of BetterMint</strong>: <a href="https://github.com/BetterMint/BetterMint/releases/">BetterMint.zip</a>
-</p>
-<p align="center">
-  - <strong>Download and install Python 3.12.3</strong>: <a href="https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe">Python Installer</a>. Make sure to check the box that says "Add Python to PATH".
-</p>
-<p align="center">
-  - <strong>Download and install Git</strong>: <a href="https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe">Git Installer</a>. Make sure you do this.
-</p>
-<p align="center">
-  - <strong>Extract the downloaded BetterMint V2.zip file</strong> to a directory of your choice.
-</p>
-<p align="center">
-  - <strong>Run the setup script</strong>: Navigate to the <code>EngineWS</code> folder within the extracted directory and run <code>run.bat</code> and select a UCI engine exe file.
-</p>
+## What it is
 
-<h3 align="center">2. Set Up the Extension</h3>
-<p align="center">
-  - <strong>Open Chrome Extensions</strong>: Enter <code>chrome://extensions</code> in a new tab.
-</p>
-<p align="center">
-  - <strong>Enable Developer Mode</strong>: Toggle the switch in the top right corner.
-</p>
-<p align="center">
-  - <strong>Load the BetterMint Extension</strong>: Click <code>Load unpacked</code> and select the extracted BetterMint V2 folder.
-</p>
+BetterMint runs real chess engines next to any chess site and shows you what they think — ranked moves, arrows on the board, an evaluation bar, opening-book lines and endgame tablebase results. Eight engines are bundled and run **inside your browser**, so the basic setup needs no install, no server and no downloads.
 
-<h3 align="center">3. Configure the Engine</h3>
+If you want desktop-grade strength, the optional **EngineWS** companion runs native UCI engines (Stockfish, Lc0, Torch, anything UCI) on your machine and streams their analysis back.
 
-<p align="center">
-  - <strong>Open the Configuration Page</strong>: Navigate to <a href="http://localhost:8000/">http://localhost:8000/</a> in your browser.
-</p>
-<p align="center">
-  - <strong>Configure the Engine</strong>: Adjust settings to your preference and run <code>ucinewgame</code> to confirm your configurations.
-</p>
+Everything is optional, everything is configurable, and nothing is hardcoded.
 
-<h3 align="center">4. Start Playing</h3>
-<p align="center">
-  - <strong>Visit Chess.com</strong>: Head over to <a href="https://www.chess.com">Chess.com</a> and start a game to see BetterMint V2 in action!
-</p>
+---
 
-<h2 align="center">🧙‍♂️ Features</h2>
+## Features
 
-<p align="center">
-  - <strong>Refer to ProtonDevs Github Repo on our websockets api's that are Public and Free to use and make your own!</strong>: Navigate to <a href="https://github.com/ProtonDev-sys/bettermint-sockets">BetterMint Websockets Repo</a>.
-</p>
+### Engines
+- **Eight built-in WebAssembly engines**, no install required — Stockfish 18, Stockfish 18 NNUE, Torch 1, Torch 2, Stockfish 16 NNUE, Stockfish 16 (no SIMD), Stockfish Classic and an Explanation Engine.
+- **Run several at once.** A priority order decides which engine supplies the #1, #2 and #3 move, so you can blend a tactical engine with a positional one.
+- **EngineWS companion** for native desktop engines, with one-click downloads of the latest releases.
+- **Socket engines** — Maia, Rodent personalities, Patricia, Fairy-Stockfish and every historical Stockfish version, over a raw-UCI WebSocket. No downloads.
+- **Per-engine UCI options** are discovered automatically and exposed in the UI.
 
-<p align="center">Experience the powerful features of BetterMint V2:</p>
+### Opening books and tablebases
+- **Stage-aware knowledge.** BetterMint knows whether you are in the opening, middlegame or endgame and asks the right source for each.
+- **Polyglot `.bin` books** load directly in the browser and are binary-searched instantly. Assign each book to a stage.
+- **Larger books from disk** through EngineWS, plus **Syzygy** and **Gaviota** tablebases.
+- **Online 7-piece tablebase fallback** that works with no setup at all, routed through the extension so the site never sees the request.
+- Book moves render as dashed amber arrows with real win/draw/loss statistics.
 
-<h3 align="center">🌟 Universal UCI Engine Support</h3>
-<p align="center">
-  BetterMint V2 supports most UCI engines, allowing you to choose your preferred engine for analysis and gameplay enhancement. Stay updated for continuous improvements and bug fixes.
-</p>
+### Playing like a person
+- **Humanizer** — think time drawn from a bell curve, longer pauses at critical moments, faster play in time pressure, instant replies in known opening theory.
+- **A visible move distribution.** Set the chance of the 2nd best, 3rd best and deeper moves, plus deliberate blunders with a cooldown, and see exactly what percentage the best move ends up with.
+- **Elo Match Skill** scales strength, timing and mistake rate toward a target rating.
+- **Auto move**, premoves and auto queue.
+- **Hand & Brain** mode.
 
-<h3 align="center">🌟 Multi Engine Capability</h3>
-<p align="center">
-  BetterMint is now able to use multiple engines at the same time, what a wonder.
-</p>
+### Understanding the game
+- **Coach mode** grades every move you play and explains why, using the familiar taxonomy — Brilliant, Great Find, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Missed Win, Blunder.
+- **Text-to-speech** for moves and coaching, with an option to speak only mistakes.
+- **In-game HUD** with an evaluation bar, ranked move list, depth readout and game-stage badge.
+- **Stream-proof window** — a separate always-on-top window carrying the board, evaluation, engine lines and book lines, so nothing appears on the captured tab.
 
-<h2 align="center">🧙‍♂️ We also have an old friends project GMCheems currently up! you can see it in the BetterCheems Folder!</h2>
+### Extending it
+- **Lua scripting** with a documented API, worked examples and a built-in editor.
+- **Variants and Chess960** support.
+- **Automatic board detection** — it finds the board on chess sites it has never seen before.
 
-<h2 align="center">📜 Credits</h2>
+---
 
-<p align="center">This project is a collaborative effort made possible by the contributions of:</p>
-<p align="center">
-  - <a href="https://github.com/sakiodre">thedemons</a> - Original Creator<br>
-  - <a href="https://github.com/webcubed">Webcubed</a> - Development<br>
-  - <a href="https://github.com/hotamago">HotaVN</a> - Development and Improvements<br>
-  - <a href="https://github.com/BotSolvers">BetterMint</a> - Own Development and Maintenance<br>
-  - <a href="https://github.com/ProtonDev-sys">ProtonDev</a> - API Docs & Public API Host<br>
-    - <a href="https://github.com/gmcheems">GMCheems</a> - Made GMCheems
-  - <a href="https://github.com/lucaskvasirr">lucaskvasirr</a> - Premove Code Snippet
-</p>
+## Installing
 
-<p align="center">Remember, BetterMint V2 is a tool to enhance your learning and enjoyment of chess. Embrace the journey to mastery through practice and dedication!</p>
+### The extension
+
+1. Download or clone this repository.
+2. Open `chrome://extensions` and turn on **Developer mode** (top right).
+3. Click **Load unpacked** and select the `BetterMint` folder.
+4. Open any chess site. The HUD appears on its own.
+
+That is the whole setup. The eight built-in engines work immediately.
+
+### EngineWS (optional)
+
+Only needed for native desktop engines, disk-based books and local tablebases.
+
+**Requirements:** Python 3.10 or newer.
+
+```bash
+cd EngineWS
+pip install -r requirements.txt
+python main.py
+```
+
+Windows users can just double-click `run.bat`.
+
+On first run EngineWS creates its own `config.json` and prints something like:
+
+```
+==============================================================
+  BetterMint EngineWS v2.0
+  Dashboard: http://127.0.0.1:8000
+  Paste this into the extension's EngineWS address setting:
+  ws://127.0.0.1:8000/ws?token=XXXXXXXXXXXXXXXXXXXXXXXX
+==============================================================
+```
+
+Copy that whole `ws://` line into **Settings → Engine → EngineWS URL** in the extension.
+
+> **Why a token?** WebSockets are not covered by the browser's same-origin policy, so without one *any* page you happened to be visiting could connect to your local server and list your engines. The token closes that. Set `"require_token": false` in `config.json` if you would rather turn it off.
+
+Open <http://127.0.0.1:8000> for the dashboard: engine status, priority order, one-click engine downloads and book management.
+
+---
+
+## Using it
+
+| What you want | Where to go |
+| --- | --- |
+| Turn features on and off quickly | **Dashboard → Quick Toggles** |
+| Depth, MultiPV, threads, which engines run | **Settings → Engine** |
+| Think time, blunder rate, move distribution | **Settings → Humanization** |
+| Auto move, premoves, which rank gets played | **Settings → Auto Move** |
+| Move grading and spoken feedback | **Settings → Coach Mode** |
+| Upload books, assign game stages | **Books & TB** |
+| Maia and other hosted engines | **Sockets** |
+| Custom scripts | **Lua Scripting** |
+| Full explanation of every feature | **Docs** |
+
+**A tip worth knowing:** MultiPV controls how many distinct lines the engines report, and that is what feeds the arrows, the ranked list and the humanizer's choice of move. If MultiPV is 1 there is only ever one move to choose from, so the humanizer cannot vary anything.
+
+---
+
+## Verifying EngineWS
+
+A smoke test ships with the server. Start EngineWS, then:
+
+```bash
+cd EngineWS
+python smoke_test.py
+```
+
+It reports every enabled engine's best move, every book that answered, and any tablebase hit — so you can tell at a glance whether a book is actually loading or an engine is silently failing.
+
+---
+
+## Notes
+
+- **Book files must be polyglot `.bin`.** ChessBase CTG cannot be read; convert it first.
+- **Simulated mouse input is off by default and should stay off.** Synthetic events carry `isTrusted=false` and can be detected. The site-API path is the safe one.
+- Engines run in isolated workers in an extension-origin frame, so a site's Content-Security-Policy cannot block them and the page cannot see them.
+
+---
+
+## Credits
+
+This project is a collaborative effort made possible by:
+
+- **[thedemons](https://github.com/thedemons)** — Original creator
+- **[ProtonDev](https://github.com/ProtonDevBS)** — API docs & public API host
+- **BetterMint** — Development and maintenance
+
+---
+
+## License
+
+See [LICENSE](LICENSE).
+
+<div align="center">
+
+**[Join the Discord](https://discord.gg/bettermint)**
+
+*v3.0.0 · undetectable by design*
+
+</div>
