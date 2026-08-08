@@ -1,5 +1,10 @@
 <div align="center">
 
+<p align="center">
+  <img src="https://github.com/BetterMint/BetterMint/blob/main/generated_video%20(1).gif?raw=true"
+       alt="BetterMint banner" />
+</p>
+
 # BetterMint
 
 **A universal chess analysis companion — multi-engine, book-aware, tablebase-backed, and undetectable by design.**
