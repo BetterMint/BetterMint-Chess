@@ -1,5 +1,6 @@
 import { BuiltinEngines, enabledKey, priorityKey, linesKey } from "../engine/BuiltinEngines.js";
 import { THEME_TOKENS, HUD_THEMES, customThemeKey } from "../ui/HUD.js";
+import { COACHES } from "../features/CoachData.js";
 
 const themeItems = () => THEME_TOKENS.map((t) => ({
   key: customThemeKey(t.key),
@@ -50,7 +51,7 @@ export const SettingsSchema = [
       { key: "engine.multipv", label: "MultiPV lines", type: "range", def: 1, min: 1, max: 32, step: 1, desc: "Number of distinct best lines each engine reports" },
       { key: "engine.threads", label: "Threads", type: "range", def: 4, min: 1, max: 128, step: 1, desc: "Clamped per engine to its reported UCI max" },
       { key: "engine.hash", label: "Hash (MB)", type: "range", def: 256, min: 1, max: 32768, step: 1, desc: "Clamped per engine to its reported UCI max" },
-      { key: "engine.wasmHashCap", label: "Hash cap for in-browser engines (MB)", type: "range", def: 64, min: 8, max: 512, step: 8, desc: "The bundled WASM engines advertise huge hash limits they cannot actually allocate and will abort with an out-of-memory crash. This caps them safely. Raise only if your engines stay stable" },
+      { key: "engine.wasmHashCap", label: "Hash cap for in-browser engines (MB)", type: "range", def: 32, min: 8, max: 512, step: 8, desc: "The bundled WASM engines advertise huge hash limits they cannot actually allocate and will abort with an out-of-memory crash. This caps them safely. Raise only if your engines stay stable" },
       { key: "engine.rankingMode", label: "Move ranking mode", type: "select", def: "smart", options: [
         { v: "smart", l: "Best evaluation first" },
         { v: "priority", l: "Engine priority order" },
@@ -104,18 +105,24 @@ export const SettingsSchema = [
     category: "coach", label: "Coach Mode",
     items: [
       { key: "coach.enabled", label: "Enable coach", type: "bool", def: false, desc: "Grades every move you play and explains why, using the same taxonomy as chess.com's review (Brilliant, Great Find, Best, Excellent, Good, Book, Forced, Inaccuracy, Mistake, Missed Win, Blunder)" },
+      { key: "coach.select", label: "Coach avatar", type: "select", def: COACHES[0].id, options: COACHES.map((c) => ({ v: c.id, l: c.titledName })), desc: "Choose your chess coach — each has their own avatar and voice" },
+      { key: "coach.showAvatar", label: "Show coach avatar in HUD", type: "bool", def: true, desc: "Display the coach avatar image next to the grade card" },
+      { key: "coach.speechBubble", label: "Show speech bubble", type: "bool", def: true, desc: "Display coach messages in a speech bubble with typewriter animation" },
       { key: "coach.showTips", label: "Show explanations", type: "bool", def: true, desc: "Add a short coaching note under each grade" },
       { key: "coach.suggestBetter", label: "Show the better move", type: "bool", def: true, desc: "When you miss the top line, name the move you should have played" },
       { key: "coach.coachBoth", label: "Also grade the opponent", type: "bool", def: false, desc: "Grade both sides instead of only your moves" },
-      { key: "coach.speak", label: "Speak the grade (TTS)", type: "bool", def: false, desc: "Read each grade aloud with speech synthesis" },
+      { key: "coach.speak", label: "Speak the grade (TTS)", type: "bool", def: false, desc: "Read each grade aloud using the coach voice" },
       { key: "coach.speakTips", label: "TTS: also read the explanation", type: "bool", def: false, desc: "Speak the coaching note as well as the grade name" },
       { key: "coach.speakOnlyBad", label: "TTS: only speak mistakes", type: "bool", def: true, desc: "Stay quiet on good moves — only speak Inaccuracy, Mistake, Missed Win and Blunder" },
-      { key: "coach.ttsVoice", label: "TTS voice", type: "text", def: "", desc: "Voice name, e.g. 'Google UK English Female'. Leave blank for the system default" },
+      { key: "coach.ttsVoice", label: "TTS voice override", type: "text", def: "", desc: "Override the coach's default voice. Voice name, e.g. 'Google UK English Male'. Leave blank to use the coach voice" },
       { key: "coach.ttsRate", label: "TTS speed", type: "range", def: 1.05, min: 0.5, max: 2, step: 0.05, float: true },
       { key: "coach.ttsPitch", label: "TTS pitch", type: "range", def: 1, min: 0, max: 2, step: 0.1, float: true },
       { key: "coach.ttsVolume", label: "TTS volume", type: "range", def: 0.85, min: 0, max: 1, step: 0.05, float: true },
       { key: "coach.minDepth", label: "Minimum depth to grade", type: "range", def: 12, min: 4, max: 40, step: 1, desc: "Wait until the engine reaches this depth before judging a move" },
       { key: "coach.accuracy", label: "Show running accuracy", type: "bool", def: true, desc: "Display a live accuracy percentage in the HUD" },
+      { key: "coach.learningMode", label: "Learning mode", type: "bool", def: false, desc: "Coach analyses opponent threats and suggests what to watch for — spoken via TTS" },
+      { key: "coach.supportiveMode", label: "Supportive mode", type: "bool", def: false, desc: "Coach gives random encouragement and comments on your moves — spoken via TTS" },
+      { key: "coach.modeInStreamproof", label: "Show coach modes in stream-proof", type: "bool", def: true, desc: "Display coach mode commentary in the stream-proof overlay window" },
     ],
   },
   {
@@ -158,13 +165,25 @@ export const SettingsSchema = [
       { key: "ui.arrowColorRest", label: "Deeper ranks color", type: "color", def: "#8b5cf6", desc: "Ranks 4 and beyond fade from the 3rd colour toward this one, so a 5 or 10 line readout stays readable instead of turning grey" },
       { key: "ui.arrowOpacity", label: "Arrow opacity", type: "range", def: 0.85, min: 0.1, max: 1, step: 0.05, float: true },
       { key: "ui.arrowWidth", label: "Arrow width", type: "range", def: 10, min: 4, max: 20, step: 1 },
-      { key: "ui.arrowStyle", label: "Arrow style", type: "select", def: "solid", options: [
+      { key: "ui.arrowStyle", label: "Arrow style", type: "select", def: "gradient", options: [
         { v: "solid", l: "Solid" }, { v: "neon", l: "Neon (outer glow)" }, { v: "plasma", l: "Plasma (animated gradient)" },
         { v: "gradient", l: "Gradient fade" }, { v: "outline", l: "Outline only" }, { v: "laser", l: "Laser (thin + core)" },
         { v: "comet", l: "Comet (tapered tail)" },
-      ], desc: "Rendering style for engine arrows" },
+        { v: "chevron", l: "Chevron (double arrowhead)" }, { v: "dart", l: "Dart (slim pointed)" },
+        { v: "blocky", l: "Blocky (thick square head)" }, { v: "thin", l: "Thin line + small head" },
+        { v: "curved", l: "Curved (arc path)" }, { v: "hollow", l: "Hollow outline + fill" },
+      ], desc: "Rendering style for engine arrows — includes both visual effects and arrow shapes" },
       { key: "ui.arrowGlow", label: "Glow strength", type: "range", def: 14, min: 0, max: 40, step: 1, desc: "Outer glow radius for neon/plasma/laser styles" },
       { key: "ui.arrowAnimate", label: "Animate arrows", type: "bool", def: false, desc: "Pulse/flow effect on the best-move arrow" },
+      { key: "ui.arrowAnimationType", label: "Animation type", type: "select", def: "pulse", options: [
+        { v: "pulse", l: "Pulse (opacity)" }, { v: "flow", l: "Flow (dash march)" }, { v: "breath", l: "Breath (scale)" }, { v: "rainbow", l: "Rainbow (hue shift)" },
+      ], desc: "Animation style when arrow animation is enabled" },
+      { key: "ui.arrowColorMode", label: "Color mode", type: "select", def: "rank", options: [
+        { v: "rank", l: "By rank (1st=green, 2nd=blue...)" }, { v: "gradient", l: "Gradient (best→worst)" }, { v: "single", l: "Single color" }, { v: "rainbow", l: "Rainbow cycle" },
+      ], desc: "How arrow colors are assigned when multiple lines are shown" },
+      { key: "ui.arrowCustomColor", label: "Custom single color", type: "color", def: "#4ade80", desc: "Used when color mode is 'Single color'" },
+      { key: "ui.arrowGradientStart", label: "Gradient start color", type: "color", def: "#4ade80", desc: "Start color for gradient mode" },
+      { key: "ui.arrowGradientEnd", label: "Gradient end color", type: "color", def: "#8b5cf6", desc: "End color for gradient mode" },
       { key: "ui.arrowDash", label: "Dashed arrows", type: "bool", def: false },
       { key: "ui.highlights", label: "Square highlights", type: "bool", def: true },
       { key: "ui.evalBar", label: "Evaluation bar", type: "bool", def: true },
@@ -188,12 +207,16 @@ export const SettingsSchema = [
       { key: "ui.accentGlow", label: "Accent glow", type: "bool", def: true, desc: "Soft neon edge lighting on panels and buttons" },
       { key: "ui.compactHud", label: "Compact HUD", type: "bool", def: false, desc: "Tighter spacing, smaller type" },
       { key: "ui.hudOpacity", label: "HUD opacity", type: "range", def: 0.97, min: 0.3, max: 1, step: 0.01, float: true },
+      { key: "ui.hudFloatX", label: "HUD float X", type: "range", def: null, min: 0, max: 4096, step: 1, hidden: true },
+      { key: "ui.hudFloatY", label: "HUD float Y", type: "range", def: null, min: 0, max: 4096, step: 1, hidden: true },
     ],
   },
   {
     category: "elomatch", label: "Elo Match Skill",
     items: [
       { key: "elo.matchEnabled", label: "Match opponent Elo", type: "bool", def: false, desc: "Read the opponent's rating from the page and cap your play just above it" },
+      { key: "elo.manualTarget", label: "Manual target Elo (0 = auto-detect)", type: "range", def: 0, min: 0, max: 3200, step: 10, desc: "Set a specific elo to play at. 0 means auto-detect from opponent." },
+      { key: "elo.accuracyRange", label: "Accuracy variance %", type: "range", def: 0, min: 0, max: 100, step: 5, desc: "Higher = more blunders and inaccuracies. 0 = play at full strength for the target elo." },
       { key: "elo.offset", label: "Play this far above them", type: "range", def: 50, min: -600, max: 600, step: 10, desc: "Target = opponent rating + this. 50 means you edge them out convincingly but not absurdly." },
       { key: "elo.min", label: "Never go below", type: "range", def: 800, min: 250, max: 3000, step: 50 },
       { key: "elo.max", label: "Never go above", type: "range", def: 2600, min: 500, max: 3600, step: 50 },
@@ -259,6 +282,7 @@ export const SettingsSchema = [
       { key: "ov.pieceWhite", label: "White piece colour", type: "color", def: "#ffffff", desc: "Fill colour for white pieces drawn in the stream-proof window" },
       { key: "ov.pieceBlack", label: "Black piece colour", type: "color", def: "#1a1a1a", desc: "Fill colour for black pieces drawn in the stream-proof window" },
       { key: "ov.alwaysOnTop", label: "Keep external window focused", type: "bool", def: false, desc: "Refocuses the helper window after updates (can steal focus)" },
+      { key: "ov.externalEnabled", label: "Stream-Proof Overlay", type: "bool", def: false, desc: "Open the external stream-proof overlay window" },
     ],
   },
   {
@@ -327,6 +351,7 @@ export const SettingsSchema = [
       { key: "priv.disguiseIcon", label: "Disguise toolbar icon", type: "bool", def: false, desc: "Replaces the pinned toolbar icon and its tooltip with a plain grey one. Note the name and logo on chrome://extensions come from the manifest and cannot be changed while running." },
       { key: "priv.disguiseTooltip", label: "Disguised tooltip", type: "text", def: "Extension", desc: "Hover text shown on the toolbar button while the icon is disguised" },
       { key: "priv.stripOnUnload", label: "Remove all traces on page unload", type: "bool", def: true, desc: "Deletes injected nodes, globals and observers before the page goes away" },
+      { key: "stealth.mobileHashCap", label: "Mobile hash cap (MB)", type: "range", def: 16, min: 4, max: 128, step: 4, desc: "Maximum hash size for in-browser engines on mobile devices to prevent WASM out-of-memory crashes" },
     ],
   },
 ];

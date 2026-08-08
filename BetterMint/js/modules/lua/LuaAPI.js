@@ -54,6 +54,7 @@ export class LuaAPI {
         get: (k) => app.settings.get(String(k)),
         set: (k, v) => app.settings.set(String(k), v),
         all: () => app.settings.getAll(),
+        reset: () => { try { app.settings.reset(); } catch {} },
       },
       game: {
         fen: () => app.currentFen,
@@ -65,6 +66,18 @@ export class LuaAPI {
         is_my_turn: () => app.isOurTurn(),
         play: (uci) => app.playMove(String(uci)),
         san: (uci) => app.uciToSan(String(uci)),
+        legal_moves: () => { try { return app.chess.moves({ verbose: true }).map((m) => m.from + m.to + (m.promotion || "")); } catch { return []; } },
+        in_check: () => { try { return app.chess.inCheck(); } catch { return false; } },
+        is_checkmate: () => { try { return app.chess.isCheckmate(); } catch { return false; } },
+        is_stalemate: () => { try { return app.chess.isStalemate(); } catch { return false; } },
+        is_draw: () => { try { return app.chess.isDraw(); } catch { return false; } },
+        is_threefold: () => { try { return app.chess.isThreefoldRepetition(); } catch { return false; } },
+        is_insufficient: () => { try { return app.chess.isInsufficientMaterial(); } catch { return false; } },
+        result: () => { try { if (!app.chess.isGameOver()) return null; if (app.chess.isCheckmate()) return app.chess.turn() === "w" ? "0-1" : "1-0"; return "1/2-1/2"; } catch { return null; } },
+        history_san: () => { try { return app.chess.history({ verbose: true }).map((m) => m.san); } catch { return []; } },
+        clock: () => { try { return app.exploits?.opponentClock?.() ?? null; } catch { return null; } },
+        move_count: () => { try { return app.chess.history().length; } catch { return 0; } },
+        fen_after: (uci) => { try { const tmp = new (app.chess.constructor)(app.chess.fen()); tmp.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); return tmp.fen(); } catch { return null; } },
       },
       engine: {
         analyze: (fen, depth) => app.analyzePosition(String(fen || app.currentFen), depth),
@@ -78,6 +91,7 @@ export class LuaAPI {
         set_depth: (d) => app.engineManager.configure({ depth: Number(d) }),
         on_bestmove: (fn) => this._sub(app.engineManager.on("bestmove", (e) => this._call(fn, { move: e.move, engine: e.engine, rank: e.rank }))),
         on_eval: (fn) => this._sub(app.engineManager.on("eval", (e) => this._call(fn, e))),
+        on_line: (fn) => this._sub(app.engineManager.on("ranked", (moves) => this._call(fn, moves.map((m) => ({ move: m.move, rank: m.rank, engine: m.engine, score: m.displayScore }))))),
       },
       book: {
         lines: () => (app.lastBookQuery?.lines || []).map((l) => ({ move: l.move, san: l.san, pct: l.pct, source: l.source, book: l.bookName })),
@@ -90,11 +104,13 @@ export class LuaAPI {
         highlight: (sq, color) => app.overlay.addHighlight(String(sq), String(color || "#4ade80")),
         ring: (sq, color) => app.overlay.addHighlight(String(sq), String(color || "#4ade80"), { style: "ring" }),
         clear: () => app.overlay.clear(),
+        clear_highlights: () => app.overlay.clearHighlights(),
         flipped: (v) => app.overlay.setFlipped(!!v),
       },
       ui: {
         panel: (title) => this._makePanel(String(title || this.scriptName)),
         notify: (text) => app.toast(String(text)),
+        toast: (text) => app.toast(String(text)),
       },
       site: {
         name: () => app.hostKind,
@@ -131,9 +147,6 @@ export class LuaAPI {
     try { return document.querySelector(String(sel)); } catch { return null; }
   }
 
-  // Every callback a script hands us is invoked through here. Swallowing the
-  // failure silently leaves the author with a script that simply does nothing
-  // and no way to find out why, so it is reported to their script log.
   _call(fn, ...args) {
     if (typeof fn !== "function") {
       this.app.luaLog(this.scriptName, "ERROR: expected a function callback", true);
@@ -204,9 +217,7 @@ export class LuaAPI {
   }
 
   _onEvent(name, fn) {
-    // Subscribing to every event and keeping only the requested one meant a
-    // script asking for one event was called for all six, and the five extra
-    // subscriptions were never released.
+
     if (!LUA_EVENTS.includes(name)) {
       this.app.luaLog(
         this.scriptName,

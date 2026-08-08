@@ -4,12 +4,8 @@ import { rankColor } from "../ui/RankColors.js";
 
 const GLYPHS = { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" };
 
-// Reloading the page destroys our handle to the window but not the window
-// itself, which then sits there showing a position that will never update.
-// Giving it a name means a later open() re-targets that same window instead of
-// abandoning it and putting a second one on screen.
 const WINDOW_NAME = "bm_notes_view";
-// Per-tab, so it survives a reload and is forgotten when the tab is closed.
+
 const OPEN_FLAG = "bm.notes.open";
 
 const THEMES = {
@@ -37,38 +33,37 @@ const WINDOW_HTML = (title) => `<!DOCTYPE html><html><head><meta charset="utf-8"
 html,body{height:100%;overflow:hidden}
 body{display:flex;flex-direction:column;padding:0}
 
-/* ---- header ---- */
 #top{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid transparent;flex:0 0 auto}
 #ttl{font-size:12px;font-weight:700;letter-spacing:.4px;opacity:.9}
 #top .spacer{flex:1}
 #badges{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 .badge{font-size:9px;font-weight:700;padding:3px 8px;border-radius:99px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 
-/* ---- main split ---- */
 #main{flex:1;display:flex;gap:14px;padding:14px;min-height:0}
 #left{display:flex;gap:10px;align-items:flex-start;flex:0 0 auto}
 
-/* vertical eval bar, like the sites use */
 #evalwrap{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto}
-#bar{position:relative;width:14px;border-radius:7px;overflow:hidden;display:block}
-#barfill{position:absolute;left:0;right:0;bottom:0;transition:height .3s cubic-bezier(.4,0,.2,1)}
-#evaltext{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+#bar{position:relative;width:14px;border-radius:7px;overflow:hidden;display:block;box-shadow:0 0 8px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.06)}
+#barfill{position:absolute;left:0;right:0;bottom:0;transition:height .4s cubic-bezier(.34,1.56,.64,1)}
+#evaltext{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.2px;transition:color .3s,text-shadow .3s}
+#evaltext.glow{text-shadow:0 0 6px currentColor}
 
 #boardwrap{position:relative;flex:0 0 auto}
-#board{position:relative;user-select:none;border-radius:8px;overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.4)}
+#board{position:relative;user-select:none;border-radius:10px;overflow:hidden;box-shadow:0 10px 36px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.04)}
 .row{display:flex}
 .sq{display:flex;align-items:center;justify-content:center;position:relative}
-.sq .pc{line-height:1;font-weight:400;transition:none}
+.sq .pc{line-height:1;font-weight:400;transition:opacity .15s ease,transform .15s ease}
+.sq .pc:hover{transform:scale(1.08)}
 .sq .cd{position:absolute;font-size:8px;font-weight:700;opacity:.5;pointer-events:none}
 .sq .cd.f{right:2px;bottom:1px}
 .sq .cd.r{left:2px;top:1px}
-.pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 2px #000,0 1px 3px rgba(0,0,0,.55)}
-.pc.b{color:#1a1a1a;text-shadow:0 0 1px rgba(255,255,255,.7),0 1px 3px rgba(0,0,0,.5)}
+.pc.w{color:#fff;text-shadow:0 0 1px #000,0 0 2px #000,0 1px 4px rgba(0,0,0,.6)}
+.pc.b{color:#1a1a1a;text-shadow:0 0 1px rgba(255,255,255,.7),0 1px 4px rgba(0,0,0,.5)}
 canvas{position:absolute;top:0;left:0;pointer-events:none}
 
-/* ---- side panels ---- */
 #side{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;overflow-x:hidden}
-.card{border-radius:10px;padding:10px 11px;font-size:12px;flex:0 0 auto}
+.card{border-radius:12px;padding:10px 11px;font-size:12px;flex:0 0 auto;transition:border-color .2s,box-shadow .2s}
+.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
 .card h4{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;font-weight:800;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .card .tag{font-size:9px;padding:2px 7px;border-radius:99px;font-weight:800;white-space:nowrap}
 .row2{display:flex;align-items:center;gap:8px;padding:4px 0;font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(128,128,128,.12)}
@@ -83,8 +78,6 @@ canvas{position:absolute;top:0;left:0;pointer-events:none}
 #side::-webkit-scrollbar-thumb{border-radius:4px;background:rgba(128,128,128,.35)}
 #side::-webkit-scrollbar-thumb:hover{background:rgba(128,128,128,.55)}
 
-/* the window is opened deliberately, so it is worth easing in rather than
-   snapping into place */
 #top,#left,#side>.card{animation:panelIn .3s cubic-bezier(.4,0,.2,1) both}
 #left{animation-delay:.04s}
 #side>.card:nth-child(1){animation-delay:.08s}
@@ -96,7 +89,7 @@ canvas{position:absolute;top:0;left:0;pointer-events:none}
 .row2:hover{background:rgba(128,128,128,.10)}
 .badge{transition:background .2s,color .2s}
 #evaltext{transition:color .25s}
-/* pieces cross-fade as the position changes instead of blinking */
+
 .sq .pc{transition:opacity .12s linear}
 
 @media (prefers-reduced-motion: reduce){
@@ -115,6 +108,7 @@ canvas{position:absolute;top:0;left:0;pointer-events:none}
     <div id="boardwrap"><div id="board"></div></div>
   </div>
   <div id="side">
+    <div class="card" id="c-coach" style="display:none"><h4><span>Coach</span><span class="tag" id="t-coachmode"></span></h4><div id="d-coach" style="font-size:11px;line-height:1.6"></div></div>
     <div class="card" id="c-lines"><h4><span>Engine</span><span class="tag" id="t-depth"></span></h4><div id="d-lines"></div></div>
     <div class="card" id="c-tb"><h4><span>Tablebase</span><span class="tag" id="t-tb"></span></h4><div id="d-tb"></div></div>
     <div class="card" id="c-book"><h4><span>Book</span><span class="tag" id="t-book"></span></h4><div id="d-book"></div></div>
@@ -128,6 +122,11 @@ export class OverlayWindow {
     this.win = null;
     this._chess = new Chess();
     this._lastData = null;
+    this._lastCoachReport = null;
+  }
+
+  _esc(str) {
+    return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   get isOpen() {
@@ -137,8 +136,7 @@ export class OverlayWindow {
   get theme() {
     const name = this.settings.get("ov.theme");
     if (name === "custom") {
-      // share the one custom palette with the HUD and the menu, and let the
-      // board squares be picked independently
+
       const t = resolveTheme(this.settings);
       return {
         bg: t.deep, panel: t.surface, text: t.text, dim: t.dim, line: t.line,
@@ -158,14 +156,13 @@ export class OverlayWindow {
     const scale = this.settings.get("ov.externalScale");
     const size = Math.round(448 * scale);
     const title = String(this.settings.get("priv.disguiseName") || "Notes");
-    // board + eval column + side panel + padding, and header + padding vertically
+
     const panels = this._anyPanel() ? 260 : 0;
     const width = size + 24 + 28 + panels + 28;
     const height = size + 48 + 28 + 16;
     this.win = window.open("", WINDOW_NAME, `width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no`);
     if (!this.win) return false;
-    // A window recovered from before a reload still holds the old markup, so
-    // the document is always rewritten rather than trusted.
+
     this.win.document.open();
     this.win.document.write(WINDOW_HTML(title));
     this.win.document.close();
@@ -177,9 +174,6 @@ export class OverlayWindow {
     return true;
   }
 
-  // Re-adopts a window left behind by a previous load. Browsers only allow a
-  // window to be opened from a user gesture, so a refused restore is retried
-  // the next time the user touches the page.
   restore(onAdopted) {
     if (!this.wasOpen || this.isOpen) return false;
     if (this.open()) return true;
@@ -229,8 +223,7 @@ export class OverlayWindow {
       tag.style.background = t.line;
       tag.style.color = t.text;
     }
-    // The bar reads like the sites': the light portion is White's share and
-    // grows from the bottom, so a rising light bar always means White better.
+
     const bar = doc.getElementById("bar");
     const fill = doc.getElementById("barfill");
     if (bar) bar.style.background = t.barFill;
@@ -246,6 +239,13 @@ export class OverlayWindow {
 
   _anyPanel() {
     return !!(this.settings.get("ov.showLines") || this.settings.get("ov.showBook") || this.settings.get("ov.showTb"));
+  }
+
+  refreshTheme() {
+    if (!this.isOpen) return;
+    this._applyTheme();
+    this._buildBoard();
+    if (this._lastData) this.update(this._lastData);
   }
 
   close() {
@@ -277,7 +277,6 @@ export class OverlayWindow {
         pc.style.fontSize = Math.round(sq * 0.78) + "px";
         cell.appendChild(pc);
 
-        // board coordinates, like the sites show
         const flip = this._lastData?.flipped;
         if (f === 0) {
           const rank = doc.createElement("span");
@@ -297,7 +296,7 @@ export class OverlayWindow {
       }
       board.appendChild(row);
     }
-    // match the eval bar to the board exactly
+
     const bar = doc.getElementById("bar");
     if (bar) bar.style.height = sq * 8 + "px";
 
@@ -359,7 +358,7 @@ export class OverlayWindow {
       if (!from || !to) return;
       const color = (typeof m === "object" && m.color) || colors[i % colors.length];
       const label = (typeof m === "object" && m.label) || "#" + (i + 1);
-      this._arrow(ctx, from, to, color, sq * 0.16, label, sq, { style, glow });
+      this._arrow(ctx, from, to, color, sq * 0.16, label, sq, { style, glow, from: uci.slice(0, 2), to: uci.slice(2, 4), flipped });
     });
 
     this._renderEval(doc, t, evalCp, evalMate, evalWhiteCp, evalWhiteMate, flipped);
@@ -367,6 +366,7 @@ export class OverlayWindow {
     this._renderLines(doc, t, lines, depth);
     this._renderTb(doc, t, tbLines);
     this._renderBook(doc, t, bookLines);
+    this._renderCoach(doc, t);
 
     if (this.settings.get("ov.alwaysOnTop")) {
       try { this.win.focus(); } catch {}
@@ -380,25 +380,34 @@ export class OverlayWindow {
     const text = doc.getElementById("evaltext");
     if (!fill) return;
 
-    // bar geometry always follows White; the label follows the user's setting
-    const barCp = whiteCp != null ? whiteCp : evalCp;
-    const barMate = whiteMate != null ? whiteMate : evalMate;
+    const evalPerspective = this.settings.get("ui.evalPerspective") || "player";
+    let barCp, barMate, labelCp, labelMate;
+    if (evalPerspective === "white") {
+      barCp = whiteCp != null ? whiteCp : evalCp;
+      barMate = whiteMate != null ? whiteMate : evalMate;
+      labelCp = barCp; labelMate = barMate;
+    } else if (evalPerspective === "engine") {
+      barCp = evalCp; barMate = evalMate;
+      labelCp = barCp; labelMate = barMate;
+    } else {
+      barCp = evalCp; barMate = evalMate;
+      labelCp = barCp; labelMate = barMate;
+    }
 
     let pct = 50;
     let label = "\u2014";
     if (barMate != null) pct = barMate > 0 ? 100 : 0;
     else if (barCp != null) pct = 50 + 50 * (2 / (1 + Math.exp(-0.004 * barCp)) - 1);
 
-    if (evalMate != null) label = (evalMate > 0 ? "+M" : "-M") + Math.abs(evalMate);
-    else if (evalCp != null) label = (evalCp >= 0 ? "+" : "") + (evalCp / 100).toFixed(2);
+    if (labelMate != null) label = (labelMate > 0 ? "+M" : "-M") + Math.abs(labelMate);
+    else if (labelCp != null) label = (labelCp >= 0 ? "+" : "") + (labelCp / 100).toFixed(2);
 
-    // when the board is flipped, Black sits at the bottom, so flip the bar too
     if (flipped) pct = 100 - pct;
     fill.style.height = pct + "%";
     fill.style.width = "100%";
     if (text) {
       text.textContent = label;
-      text.style.color = evalCp != null && evalCp < -50 ? "#f87171" : t.accent;
+      text.style.color = labelCp != null && labelCp < -50 ? "#f87171" : t.accent;
     }
   }
 
@@ -442,7 +451,7 @@ export class OverlayWindow {
       const pill = doc.createElement("span");
       pill.className = "pill";
       pill.textContent = "#" + (l.rank || "?");
-      // same colour ramp the arrows use, so the list and board agree
+
       pill.style.background = rankColor(this.settings, l.rank || 1, deepest);
 
       const mv = doc.createElement("span");
@@ -488,8 +497,7 @@ export class OverlayWindow {
       left.style.color = l.wdl > 0 ? "#4ade80" : l.wdl === 0 ? t.text : "#f87171";
       const right = doc.createElement("span");
       right.className = "meta";
-      // a drawn position has no distance to mate, and printing "mate in 0"
-      // for one reads as though it were already over
+
       const dist = l.wdl === 0 ? ""
         : l.dtm ? `mate in ${Math.abs(l.dtm)}`
         : l.dtz ? `dtz ${Math.abs(l.dtz)}`
@@ -527,6 +535,57 @@ export class OverlayWindow {
     }
   }
 
+  _renderCoach(doc, t) {
+    const card = doc.getElementById("c-coach");
+    const host = doc.getElementById("d-coach");
+    const tag = doc.getElementById("t-coachmode");
+    if (!card || !host) return;
+    const showInStreamproof = this.settings.get("coach.modeInStreamproof");
+    const coachEnabled = this.settings.get("coach.enabled");
+    if (!showInStreamproof || !coachEnabled) {
+      card.style.display = "none";
+      return;
+    }
+    card.style.display = "block";
+    if (card.style) card.style.background = t.panel;
+    const modes = [];
+    if (this.settings.get("coach.learningMode")) modes.push("Learning");
+    if (this.settings.get("coach.supportiveMode")) modes.push("Supportive");
+    if (tag) {
+      tag.textContent = modes.length ? modes.join(" + ") : "Coach";
+      tag.style.background = t.line;
+      tag.style.color = t.text;
+    }
+    const rep = this._lastCoachReport;
+    if (!rep) {
+      host.textContent = "Coach is watching...";
+      return;
+    }
+    const parts = [
+      `<b style="color:${rep.color}">${this._esc(rep.icon)} ${this._esc(rep.label)}</b>` +
+        (rep.san ? ` <span style="opacity:.85">${this._esc(rep.san)}</span>` : ""),
+      rep.tip ? `<span style="opacity:.8;font-style:italic">${this._esc(rep.tip)}</span>` : "",
+      rep.supportiveLine ? `<span style="opacity:.75">${this._esc(rep.supportiveLine)}</span>` : "",
+      rep.learningLine ? `<span style="opacity:.75">${this._esc(rep.learningLine)}</span>` : "",
+      rep.showBetter && rep.bestSan ? `<span style="opacity:.75">Better: <b>${this._esc(rep.bestSan)}</b></span>` : "",
+    ].filter(Boolean);
+    host.innerHTML = parts.join("<br>");
+  }
+
+  setCoachReport(rep) {
+    this._lastCoachReport = rep || null;
+    if (!this.isOpen) return;
+    const doc = this.win.document;
+    this._renderCoach(doc, this.theme);
+  }
+
+  setCoachLine(line) {
+    this._lastCoachReport = { ...this._lastCoachReport, modeLine: line };
+    if (!this.isOpen) return;
+    const doc = this.win.document;
+    this._renderCoach(doc, this.theme);
+  }
+
   _sqToXY(square, sq, flipped) {
     const file = "abcdefgh".indexOf(square[0]);
     const rank = 8 - Number(square[1]);
@@ -536,12 +595,41 @@ export class OverlayWindow {
     return { x: (f + 0.5) * sq, y: (r + 0.5) * sq };
   }
 
+  _isKnightMove(from, to) {
+    const df = Math.abs("abcdefgh".indexOf(to[0]) - "abcdefgh".indexOf(from[0]));
+    const dr = Math.abs(Number(to[1]) - Number(from[1]));
+    return (df === 2 && dr === 1) || (df === 1 && dr === 2);
+  }
+
+  _knightCorner(from, to) {
+    const ff = "abcdefgh".indexOf(from[0]);
+    const tf = "abcdefgh".indexOf(to[0]);
+    const fr = from[1];
+    const tr = to[1];
+    const df = Math.abs(tf - ff);
+    const dr = Math.abs(Number(tr) - Number(fr));
+    if (df > dr) return "abcdefgh"[tf] + fr;
+    return from[0] + tr;
+  }
+
   _arrow(ctx, p1, p2, color, width, label, sq, opts = {}) {
+    const from = opts.from, to = opts.to;
+    const knight = from && to && this._isKnightMove(from, to);
+    const cornerSq = knight ? this._knightCorner(from, to) : null;
+    const cp = cornerSq ? this._sqToXY(cornerSq, sq, opts.flipped) : null;
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy);
     if (len < 4) return;
-    const ux = dx / len, uy = dy / len;
+    let headUx = dx / len, headUy = dy / len;
+    if (knight && cp) {
+      const ldx = p2.x - cp.x, ldy = p2.y - cp.y;
+      const lLen = Math.hypot(ldx, ldy);
+      if (lLen > 0) { headUx = ldx / lLen; headUy = ldy / lLen; }
+    }
     const headLen = Math.min(sq * 0.5, len * 0.4);
+    const headW = headLen * 0.8;
+    const bx = p2.x - headUx * headLen;
+    const by = p2.y - headUy * headLen;
     const style = opts.style || "solid";
     ctx.save();
     ctx.globalAlpha = 0.9;
@@ -560,25 +648,143 @@ export class OverlayWindow {
     }
     if (style === "laser") width = Math.max(2, width * 0.45);
     if (style === "comet") width = Math.max(2, width * 0.8);
+    if (style === "thin") width = Math.max(2, width * 0.4);
+    if (style === "dart") width = Math.max(3, width * 0.6);
+    if (style === "blocky") width = Math.max(6, width * 1.3);
+    if (style === "hollow") width = Math.max(2, width * 0.5);
+
+    if (style === "curved" && !knight) {
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      const perpX = -headUy * sq * 0.3;
+      const perpY = headUx * sq * 0.3;
+      ctx.strokeStyle = stroke; ctx.fillStyle = color;
+      ctx.lineWidth = width; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.quadraticCurveTo(mx + perpX, my + perpY, bx, by);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(bx - headUy * headW / 2, by + headUx * headW / 2);
+      ctx.lineTo(bx + headUy * headW / 2, by - headUx * headW / 2);
+      ctx.closePath();
+      ctx.fill();
+      if (label) {
+        const lx = p2.x + sq * 0.28, ly = p2.y - sq * 0.28;
+        const fs = Math.round(sq * 0.32);
+        ctx.font = `bold ${fs}px system-ui, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.85)";
+        ctx.strokeText(label, lx, ly);
+        ctx.fillStyle = color; ctx.fillText(label, lx, ly);
+      }
+      ctx.restore();
+      return;
+    }
+
+    if (style === "chevron") {
+      ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(3, width);
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      if (knight && cp) ctx.lineTo(cp.x, cp.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      const chevW = headW * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(bx - headUx * headLen * 0.5 - headUy * chevW, by - headUy * headLen * 0.5 + headUx * chevW);
+      ctx.moveTo(bx - headUx * headLen * 0.3, by - headUy * headLen * 0.3);
+      ctx.lineTo(bx - headUx * headLen * 0.5 + headUy * chevW, by - headUy * headLen * 0.5 - headUx * chevW);
+      ctx.stroke();
+      if (label) {
+        const lx = p2.x + sq * 0.28, ly = p2.y - sq * 0.28;
+        const fs = Math.round(sq * 0.32);
+        ctx.font = `bold ${fs}px system-ui, sans-serif`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.85)";
+        ctx.strokeText(label, lx, ly);
+        ctx.fillStyle = color; ctx.fillText(label, lx, ly);
+      }
+      ctx.restore();
+      return;
+    }
 
     ctx.strokeStyle = stroke;
     ctx.fillStyle = color;
     ctx.lineWidth = width;
     ctx.lineCap = "round";
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 3;
     if (style === "outline") {
       ctx.strokeStyle = color;
       ctx.lineWidth = Math.max(1.5, width * 0.3);
     }
+    const w2 = width / 2;
+    const hw2 = headW / 2;
+    let points = [];
+    if (knight && cp) {
+      const l1 = Math.hypot(cp.x - p1.x, cp.y - p1.y);
+      const d1x = (cp.x - p1.x) / l1;
+      const d1y = (cp.y - p1.y) / l1;
+      const l2 = Math.hypot(p2.x - cp.x, p2.y - cp.y);
+      const d2x = (p2.x - cp.x) / l2;
+      const d2y = (p2.y - cp.y) / l2;
+      const p1px = -d1y, p1py = d1x;
+      const p2px = -d2y, p2py = d2x;
+      const cross = Math.abs(d1x * d2y - d1y * d2x);
+      const miterScale = cross > 0.001 ? w2 / cross : 0;
+      const mx = (p1px + p2px) * miterScale;
+      const my = (p1py + p2py) * miterScale;
+      const p1l = { x: p1.x + p1px * w2, y: p1.y + p1py * w2 };
+      const p1r = { x: p1.x - p1px * w2, y: p1.y - p1py * w2 };
+      const cpl = { x: cp.x + mx, y: cp.y + my };
+      const cpr = { x: cp.x - mx, y: cp.y - my };
+      const bxl = { x: bx + p2px * hw2, y: by + p2py * hw2 };
+      const bxr = { x: bx - p2px * hw2, y: by - p2py * hw2 };
+      points = [p1l, cpl, bxl, p2, bxr, cpr, p1r];
+    } else {
+      const ux = dx / len, uy = dy / len;
+      const px = -uy, py = ux;
+      const p1l = { x: p1.x + px * w2, y: p1.y + py * w2 };
+      const p1r = { x: p1.x - px * w2, y: p1.y - py * w2 };
+      const bxl = { x: bx + px * hw2, y: by + py * hw2 };
+      const bxr = { x: bx - px * hw2, y: by - py * hw2 };
+      points = [p1l, bxl, p2, bxr, p1r];
+    }
+
+    ctx.fillStyle = stroke;
     ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x - ux * headLen * 0.6, p2.y - uy * headLen * 0.6);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(p2.x, p2.y);
-    ctx.lineTo(p2.x - ux * headLen - uy * headLen * 0.4, p2.y - uy * headLen + ux * headLen * 0.4);
-    ctx.lineTo(p2.x - ux * headLen + uy * headLen * 0.4, p2.y - uy * headLen - ux * headLen * 0.4);
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
     ctx.closePath();
-    ctx.fill();
+    if (style === "outline") {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, width * 0.3);
+      ctx.stroke();
+    } else if (style === "hollow") {
+      ctx.globalAlpha = 0.25;
+      ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, width * 0.5);
+      ctx.stroke();
+    } else {
+      ctx.fill();
+    }
+    if (style === "laser") {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = Math.max(1, width * 0.34);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      if (knight && cp) ctx.lineTo(cp.x, cp.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
     if (label) {
       ctx.font = `bold ${Math.round(sq * 0.3)}px system-ui`;
       ctx.textAlign = "center";

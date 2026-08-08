@@ -1,5 +1,7 @@
 import { ShadowHost } from "../core/ShadowHost.js";
 import { rankColor } from "./RankColors.js";
+import { COACHES, findCoach } from "../features/CoachData.js";
+import { RiveAvatar } from "./RiveAvatar.js";
 
 const STAGE_META = {
   opening: { label: "OPENING", color: "#ff9800" },
@@ -16,9 +18,6 @@ export const HUD_THEMES = {
   blood: { surface: "#1f1113", surface2: "#2d1719", surface3: "#3d1e21", line: "#4a2226", deep: "#140a0b", accent: "#f87171", accent2: "#b91c1c", accentSoft: "rgba(248,113,113,0.35)", text: "#fef2f2", dim: "#b08a8c", chip: "#fecaca" },
 };
 
-// Every palette token is user-overridable. `resolveTheme` is the single
-// source of truth for the HUD, the options menu and the stream-proof window,
-// so a custom colour set applies everywhere at once.
 export const THEME_TOKENS = [
   { key: "surface", label: "Panel background" },
   { key: "surface2", label: "Raised surface" },
@@ -52,7 +51,7 @@ export function resolveTheme(settings) {
     const v = settings.get(customThemeKey(key));
     if (typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v.trim())) out[key] = v.trim();
   }
-  // keep the soft accent in step with a custom accent
+
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(out.accent || "");
   if (m) {
     const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16));
@@ -91,16 +90,30 @@ const HUD_CSS = `
 .vbadge{font-size:8px;font-weight:800;padding:3px 7px;border-radius:20px;letter-spacing:0.9px;background:rgba(255,255,255,0.18);color:#fff}
 .vwarn{margin:8px 10px 0;padding:6px 9px;border-radius:8px;font-size:10px;font-weight:600;color:#fde68a;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35)}
 .acc{margin-left:auto;font-size:9px;font-weight:700;letter-spacing:0.4px;color:var(--dim);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:20px}
-.ccard{border-radius:10px;padding:9px 10px;background:color-mix(in srgb, var(--cc) 14%, transparent);border:1px solid color-mix(in srgb, var(--cc) 45%, transparent);animation:coachIn 0.28s cubic-bezier(0.34,1.56,0.64,1)}
-@keyframes coachIn{from{opacity:0;transform:translateY(-6px) scale(0.97)}to{opacity:1;transform:none}}
-.chead{display:flex;align-items:center;gap:7px}
-.cicon{font-weight:800;font-size:12px;color:var(--cc);min-width:18px;text-align:center;line-height:1}
-.cname{font-weight:700;font-size:12px;color:var(--cc);letter-spacing:0.2px}
-.cmove{font-size:11px;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);padding:2px 7px;border-radius:5px}
-.closs{margin-left:auto;font-size:10px;font-weight:700;color:#ff8a80}
-.cwho{font-size:8.5px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;padding:2px 6px;border-radius:20px;background:rgba(255,255,255,0.1);color:var(--dim)}
-.ctip{margin-top:6px;font-size:10.5px;line-height:1.5;color:var(--dim)}
-.cbetter{margin-top:5px;font-size:10.5px;color:var(--dim)}
+.ccard{border-radius:8px;padding:7px 9px;background:color-mix(in srgb, var(--cc) 14%, transparent);border:1px solid color-mix(in srgb, var(--cc) 45%, transparent);animation:coachIn 0.28s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes coachIn{from{opacity:0;transform:translateY(-4px) scale(0.98)}to{opacity:1;transform:none}}
+.cavatar-row{display:flex;gap:6px;align-items:flex-start}
+.cavatar-wrap{width:32px;height:32px;flex-shrink:0;border-radius:50%;overflow:hidden;position:relative;border:2px solid color-mix(in srgb, var(--cc) 60%, transparent);background:rgba(0,0,0,0.2)}
+.cavatar-wrap.gold{border-color:gold}
+.cavatar-wrap canvas,.cavatar-wrap img{display:block;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.cavatar{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid color-mix(in srgb, var(--cc) 60%, transparent);background:rgba(0,0,0,0.2)}
+.cavatar.celeb{border-color:gold}
+.cbody{flex:1;min-width:0}
+.cname-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.cbubble{margin-top:5px;padding:5px 8px;border-radius:9px 9px 9px 3px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);font-size:10px;line-height:1.45;color:var(--text);position:relative;word-wrap:break-word}
+.cbubble:empty{display:none}
+.cbubble .cursor{display:inline-block;width:2px;height:10px;background:var(--accent);margin-left:1px;animation:blink 0.7s steps(1) infinite;vertical-align:middle}
+@keyframes blink{50%{opacity:0}}
+.chead{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cicon{font-weight:800;font-size:11px;color:var(--cc);min-width:16px;text-align:center;line-height:1}
+.cname{font-weight:700;font-size:11px;color:var(--cc);letter-spacing:0.2px}
+.cmove{font-size:10px;font-weight:600;color:var(--text);background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px}
+.closs{margin-left:auto;font-size:9px;font-weight:700;color:#ff8a80}
+.cwho{font-size:8px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;padding:1px 5px;border-radius:20px;background:rgba(255,255,255,0.1);color:var(--dim)}
+.cmodes{margin-top:5px;font-size:9.5px;line-height:1.45;color:var(--dim);font-style:italic}
+.cmodes b{font-weight:700;color:var(--cc)}
+.ctip{margin-top:5px;font-size:10px;line-height:1.45;color:var(--dim)}
+.cbetter{margin-top:4px;font-size:10px;color:var(--dim)}
 .cbetter b{color:var(--accent)}
 .mini{display:none;align-items:center;gap:6px;margin-left:auto}
 .hud.collapsed .mini{display:flex}
@@ -123,7 +136,7 @@ const HUD_CSS = `
 .evalwrap{display:flex;align-items:center;gap:11px}
 .evalnum{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.6px;min-width:64px;transition:color 0.25s}
 .evalcol{flex:1;min-width:0}
-.evalbar{height:8px;border-radius:20px;background:#15151f;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.55)}
+.evalbar{height:8px;border-radius:20px;background:#2a2a2a;position:relative;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.55)}
 .evalbar:after{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.2)}
 .evalfill{height:100%;border-radius:20px;transition:width 0.35s cubic-bezier(0.4,0,0.2,1),background 0.3s}
 .depthrow{display:flex;align-items:center;gap:7px;margin-top:8px}
@@ -159,14 +172,10 @@ const HUD_CSS = `
 .hb.pop{animation:hbpop 0.4s ease}
 @keyframes hbpop{0%{transform:translateX(-50%) scale(0.8)}60%{transform:translateX(-50%) scale(1.06)}100%{transform:translateX(-50%) scale(1)}}
 
-/* pressing a control should feel like pressing it, and the keyboard should be
-   able to see where it is */
 .abtn:active{transform:translateY(1px) scale(0.985)}
 .abtn:focus-visible,.chev:focus-visible{outline:2px solid #7a5cff;outline-offset:2px}
 .row:active{transform:translateX(1px) scale(0.997)}
 
-/* the move list rewrites itself several times a second while the engines
-   report, so only the panels that change rarely get an entrance */
 .lbl{animation:fadeSlide 0.22s cubic-bezier(0.4,0,0.2,1)}
 .row.book,.row.tb{animation:fadeSlide 0.22s cubic-bezier(0.4,0,0.2,1)}
 @keyframes fadeSlide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
@@ -236,13 +245,13 @@ export class HUD {
           <div class="evalwrap">
             <div class="evalnum" data-r="evalnum">0.00</div>
             <div class="evalcol">
-              <div class="evalbar"><div class="evalfill" data-r="evalfill" style="width:50%"></div></div>
+              <div class="evalbar" data-r="evalbar"><div class="evalfill" data-r="evalfill" style="width:50%"></div></div>
               <div class="depthrow" data-r="depthrow"><span class="dtxt" data-r="dtxt"></span><span class="dbar"><span class="dfill" data-r="dfill"></span></span></div>
             </div>
           </div>
         </div>
         <div class="sec hide" data-r="secCoach">
-          <div class="lbl"><span class="dot"></span>COACH<span class="acc" data-r="acc"></span></div>
+          <div class="lbl"><span class="dot"></span>COACH<span class="acc" data-r="acc"></span><span class="mode-label" data-r="modeLabel" style="display:none;font-size:10px;font-weight:600;margin-left:6px;opacity:.85"></span></div>
           <div class="coach" data-r="coach"></div>
         </div>
         <div class="sec hide" data-r="secBook"><div data-r="book"></div></div>
@@ -301,48 +310,193 @@ export class HUD {
       if (showAcc) acc.textContent = `${this._data.accuracy}% acc`;
     }
 
+    const modeLabel = this._refs.modeLabel;
+    if (modeLabel) {
+      modeLabel.style.display = "none";
+      modeLabel.textContent = "";
+    }
+
+    const showAvatar = this.settings.get("coach.showAvatar");
+    const showBubble = this.settings.get("coach.speechBubble");
+    const coachId = this.settings.get("coach.select");
+    const coach = findCoach(coachId) || COACHES[0];
+
     box.innerHTML = "";
     const card = document.createElement("div");
     card.className = "ccard";
     card.style.setProperty("--cc", rep.color);
 
-    const head = document.createElement("div");
-    head.className = "chead";
-    head.innerHTML = `<span class="cicon">${this._esc(rep.icon)}</span>`;
-    const name = document.createElement("span");
-    name.className = "cname";
-    name.textContent = rep.label;
-    const mv = document.createElement("span");
-    mv.className = "cmove";
-    mv.textContent = rep.san;
-    head.append(name, mv);
-    if (rep.isOurs === false) {
-      const who = document.createElement("span");
-      who.className = "cwho";
-      who.textContent = "opponent";
-      head.appendChild(who);
-    }
-    if (rep.lossCp > 0) {
-      const loss = document.createElement("span");
-      loss.className = "closs";
-      loss.textContent = `-${(rep.lossCp / 100).toFixed(2)}`;
-      head.appendChild(loss);
-    }
-    card.appendChild(head);
+    if (showAvatar && coach?.iconUrl) {
+      const row = document.createElement("div");
+      row.className = "cavatar-row";
 
-    if (rep.tip) {
-      const tip = document.createElement("div");
-      tip.className = "ctip";
-      tip.textContent = rep.tip;
-      card.appendChild(tip);
-    }
-    if (rep.showBetter && rep.bestSan) {
-      const better = document.createElement("div");
-      better.className = "cbetter";
-      better.innerHTML = `better: <b>${this._esc(rep.bestSan)}</b>`;
-      card.appendChild(better);
+      const avatarWrap = document.createElement("div");
+      avatarWrap.className = "cavatar-wrap" + (coach.isCelebrity ? " gold" : "");
+
+      if (coach.riveAnimationUrl) {
+        const riveAvatar = new RiveAvatar(avatarWrap, {
+          src: coach.riveAnimationUrl,
+          fallbackUrl: coach.iconUrl,
+          alt: coach.titledName || coach.name,
+          fit: "contain",
+          alignment: "center",
+          autoplay: true,
+        });
+        if (this._riveAvatar) this._riveAvatar.destroy();
+        this._riveAvatar = riveAvatar;
+      } else {
+        const img = document.createElement("img");
+        img.src = coach.iconUrl;
+        img.alt = coach.titledName || coach.name;
+        img.onerror = () => { img.style.display = "none"; };
+        avatarWrap.appendChild(img);
+      }
+      row.appendChild(avatarWrap);
+
+      const body = document.createElement("div");
+      body.className = "cbody";
+
+      const nameRow = document.createElement("div");
+      nameRow.className = "cname-row";
+      const head = document.createElement("div");
+      head.className = "chead";
+      head.innerHTML = `<span class="cicon">${this._esc(rep.icon)}</span>`;
+      const name = document.createElement("span");
+      name.className = "cname";
+      name.textContent = rep.label;
+      const mv = document.createElement("span");
+      mv.className = "cmove";
+      mv.textContent = rep.san;
+      head.append(name, mv);
+      if (rep.isOurs === false) {
+        const who = document.createElement("span");
+        who.className = "cwho";
+        who.textContent = "opponent";
+        head.appendChild(who);
+      }
+      if (rep.lossCp > 0) {
+        const loss = document.createElement("span");
+        loss.className = "closs";
+        loss.textContent = `-${(rep.lossCp / 100).toFixed(2)}`;
+        head.appendChild(loss);
+      }
+      nameRow.appendChild(head);
+      body.appendChild(nameRow);
+
+      if (!showBubble && rep.tip) {
+        const tip = document.createElement("div");
+        tip.className = "ctip";
+        tip.textContent = rep.tip;
+        body.appendChild(tip);
+      }
+      if (rep.showBetter && rep.bestSan) {
+        const better = document.createElement("div");
+        better.className = "cbetter";
+        better.innerHTML = `better: <b>${this._esc(rep.bestSan)}</b>`;
+        body.appendChild(better);
+      }
+
+      const bubbleParts = [];
+      if (rep.tip) bubbleParts.push(rep.tip);
+      if (rep.supportiveLine) bubbleParts.push(rep.supportiveLine);
+      if (rep.learningLine) bubbleParts.push(rep.learningLine);
+      const bubbleText = bubbleParts.join("  •  ");
+      if (showBubble && bubbleText) {
+        const bubble = document.createElement("div");
+        bubble.className = "cbubble";
+        bubble.setAttribute("data-r", "cbubble");
+        body.appendChild(bubble);
+        this._typewriter(bubble, bubbleText);
+      } else if (rep.modeLine) {
+        const modes = document.createElement("div");
+        modes.className = "cmodes";
+        modes.textContent = rep.modeLine;
+        body.appendChild(modes);
+      }
+
+      row.appendChild(body);
+      card.appendChild(row);
+    } else {
+      const head = document.createElement("div");
+      head.className = "chead";
+      head.innerHTML = `<span class="cicon">${this._esc(rep.icon)}</span>`;
+      const name = document.createElement("span");
+      name.className = "cname";
+      name.textContent = rep.label;
+      const mv = document.createElement("span");
+      mv.className = "cmove";
+      mv.textContent = rep.san;
+      head.append(name, mv);
+      if (rep.isOurs === false) {
+        const who = document.createElement("span");
+        who.className = "cwho";
+        who.textContent = "opponent";
+        head.appendChild(who);
+      }
+      if (rep.lossCp > 0) {
+        const loss = document.createElement("span");
+        loss.className = "closs";
+        loss.textContent = `-${(rep.lossCp / 100).toFixed(2)}`;
+        head.appendChild(loss);
+      }
+      card.appendChild(head);
+
+      if (!showBubble && rep.tip) {
+        const tip = document.createElement("div");
+        tip.className = "ctip";
+        tip.textContent = rep.tip;
+        card.appendChild(tip);
+      }
+      if (rep.showBetter && rep.bestSan) {
+        const better = document.createElement("div");
+        better.className = "cbetter";
+        better.innerHTML = `better: <b>${this._esc(rep.bestSan)}</b>`;
+        card.appendChild(better);
+      }
+
+      const bubbleParts2 = [];
+      if (rep.tip) bubbleParts2.push(rep.tip);
+      if (rep.supportiveLine) bubbleParts2.push(rep.supportiveLine);
+      if (rep.learningLine) bubbleParts2.push(rep.learningLine);
+      const bubbleText2 = bubbleParts2.join("  •  ");
+      if (showBubble && bubbleText2) {
+        const bubble = document.createElement("div");
+        bubble.className = "cbubble";
+        bubble.setAttribute("data-r", "cbubble");
+        card.appendChild(bubble);
+        this._typewriter(bubble, bubbleText2);
+      } else if (rep.modeLine) {
+        const modes = document.createElement("div");
+        modes.className = "cmodes";
+        modes.textContent = rep.modeLine;
+        card.appendChild(modes);
+      }
     }
     box.appendChild(card);
+  }
+
+  _typewriter(el, text) {
+    if (!el || !text) return;
+    if (this._typeTimer) { clearInterval(this._typeTimer); this._typeTimer = null; }
+    el.textContent = "";
+    let i = 0;
+    const cursor = document.createElement("span");
+    cursor.className = "cursor";
+    el.appendChild(cursor);
+    this._typeTimer = setInterval(() => {
+      if (i >= text.length) {
+        clearInterval(this._typeTimer);
+        this._typeTimer = null;
+        cursor.remove();
+        return;
+      }
+      cursor.insertAdjacentText("beforebegin", text[i]);
+      i++;
+    }, 28);
+  }
+
+  setCoachTalking(value) {
+    this._riveAvatar?.setTalk?.(!!value);
   }
 
   setLogo(url) {
@@ -421,10 +575,18 @@ export class HUD {
   _applyPosition() {
     const pos = this.settings.get("ui.hudPosition");
     this.root.classList.remove("pos-right", "pos-left");
-    if (pos === "float" && this._position) {
-      this.root.style.left = this._position.x + "px";
-      this.root.style.top = this._position.y + "px";
-      this.root.style.right = "auto";
+    if (pos === "float") {
+      if (!this._position) {
+        const sx = Number(this.settings.get("ui.hudFloatX"));
+        const sy = Number(this.settings.get("ui.hudFloatY"));
+        if (Number.isFinite(sx) && Number.isFinite(sy)) this._position = { x: sx, y: sy };
+      }
+      if (this._position) {
+        this._position = this._clampToBounds(this._position);
+        this.root.style.left = this._position.x + "px";
+        this.root.style.top = this._position.y + "px";
+        this.root.style.right = "auto";
+      }
     } else {
       this.root.classList.add("pos-" + (pos === "left" ? "left" : "right"));
       this.root.style.left = "";
@@ -437,6 +599,19 @@ export class HUD {
     if (this.root) this._applyPosition();
   }
 
+  _clampToBounds(pos) {
+    const r = this.root.getBoundingClientRect();
+    const w = r.width || 280;
+    const h = r.height || 200;
+    const margin = 8;
+    const maxX = window.innerWidth - w - margin;
+    const maxY = window.innerHeight - h - margin;
+    return {
+      x: Math.max(margin, Math.min(pos.x, maxX)),
+      y: Math.max(margin, Math.min(pos.y, maxY)),
+    };
+  }
+
   _makeDraggable() {
     this._refs.grip.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -445,7 +620,10 @@ export class HUD {
       this._drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
       const move = (ev) => {
         if (!this._drag) return;
-        this._position = { x: ev.clientX - this._drag.dx, y: ev.clientY - this._drag.dy };
+        this._position = this._clampToBounds({
+          x: ev.clientX - this._drag.dx,
+          y: ev.clientY - this._drag.dy,
+        });
         this.root.style.left = this._position.x + "px";
         this.root.style.top = this._position.y + "px";
         this.root.style.right = "auto";
@@ -454,9 +632,29 @@ export class HUD {
         this._drag = null;
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        if (this._position) {
+          this.settings.set("ui.hudFloatX", Math.round(this._position.x));
+          this.settings.set("ui.hudFloatY", Math.round(this._position.y));
+        }
       };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+    });
+    this._refs.grip.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      this._position = null;
+      this.settings.set("ui.hudFloatX", null);
+      this.settings.set("ui.hudFloatY", null);
+      const r = this.root.getBoundingClientRect();
+      this._position = this._clampToBounds({
+        x: window.innerWidth - r.width - 20,
+        y: 20,
+      });
+      this.root.style.left = this._position.x + "px";
+      this.root.style.top = this._position.y + "px";
+      this.root.style.right = "auto";
+      this.settings.set("ui.hudFloatX", Math.round(this._position.x));
+      this.settings.set("ui.hudFloatY", Math.round(this._position.y));
     });
   }
 
@@ -501,6 +699,11 @@ export class HUD {
     this._renderMini();
   }
 
+  setFlipped(flipped) {
+    this._flipped = !!flipped;
+    this._renderEval();
+  }
+
   _renderEval() {
     const sec = this._refs.secEval;
     if (!sec) return;
@@ -524,9 +727,17 @@ export class HUD {
       text = (pawns >= 0 ? "+" : "") + pawns.toFixed(2);
     }
     this._refs.evalfill.style.width = pct.toFixed(1) + "%";
-    this._refs.evalfill.style.background = good
-      ? "linear-gradient(90deg,#7a5cff,#4caf50)"
-      : "linear-gradient(90deg,#7a5cff,#f44336)";
+    this._refs.evalfill.style.cssFloat = this._flipped ? "right" : "left";
+    const flipped = this._flipped;
+    const fillLight = "#e8e8e8";
+    const fillDark = "#2a2a2a";
+    if (good) {
+      this._refs.evalfill.style.background = flipped ? fillDark : fillLight;
+      this._refs.evalbar.style.background = flipped ? fillLight : fillDark;
+    } else {
+      this._refs.evalfill.style.background = flipped ? fillLight : fillDark;
+      this._refs.evalbar.style.background = flipped ? fillDark : fillLight;
+    }
     this._refs.evalnum.textContent = text;
     this._refs.evalnum.style.color = good ? "#4caf50" : "#ff6b6b";
 
@@ -577,8 +788,7 @@ export class HUD {
       : "";
     const pct = l.pct != null ? `<span class="pct">${l.pct}%</span>` : "";
     const src = l.source === "cloud" ? "☁" : l.source === "remote-book" ? "⚙" : "▤";
-    // the glyph alone does not say where a line came from, which matters when
-    // an uploaded book and the online explorer disagree
+
     const from = l.source === "cloud" ? "Lichess explorer" : l.bookName || (l.source === "remote-book" ? "EngineWS book" : "opening book");
     return `<div class="row book" data-move="${l.move}" title="${this._esc(from)}"><span class="pill" style="background:#ff9800">B${i + 1}</span><span class="san">${this._esc(l.san || l.move)}</span>${stats}${pct}<span class="src">${src}</span></div>`;
   }

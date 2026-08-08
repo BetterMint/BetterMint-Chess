@@ -30,10 +30,6 @@ const store = {
 const ENGINEWS = "http://127.0.0.1:8000";
 const DISCORD_URL = "https://discord.gg/bettermint";
 
-// EngineWS refuses anonymous callers so that a chess site cannot probe it, and
-// it hands out its token as part of the address it prints on startup. That
-// address is what the user pastes into the EngineWS URL setting, so the token
-// is read back out of there rather than asked for twice.
 let engineWsToken = "";
 
 function readEngineWsToken(url) {
@@ -157,7 +153,7 @@ class OptionsApp {
   }
 
   _applyTheme() {
-    // same resolver the HUD and overlay use, so Custom applies everywhere
+
     const t = resolveTheme({ get: (k) => this.settings[k] });
     const r = document.documentElement.style;
     r.setProperty("--primary", t.accent2);
@@ -229,12 +225,24 @@ class OptionsApp {
       toast("Settings reset");
       this.navigate(this.page);
     };
-    $("#foot-export").onclick = () => {
-      const blob = new Blob([JSON.stringify(this.settings, null, 2)], { type: "application/json" });
+    $("#foot-export").onclick = async () => {
+      const luaScripts = await new Promise((res) => chrome.storage.local.get("luaScripts", (r) => res(r.luaScripts || [])));
+      const exportData = {
+        _meta: {
+          app: "BetterMint",
+          version: 2,
+          exportedAt: new Date().toISOString(),
+          description: "Full config export — settings, colors, customizations, and Lua scripts",
+        },
+        settings: this.settings,
+        luaScripts,
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = "bettermint-settings.json";
+      a.download = `bettermint-config-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
+      toast("Config exported (settings + Lua scripts)");
     };
     $("#foot-import").onclick = () => {
       const inp = document.createElement("input");
@@ -242,10 +250,18 @@ class OptionsApp {
       inp.accept = ".json";
       inp.onchange = async () => {
         try {
-          const obj = JSON.parse(await inp.files[0].text());
-          for (const [k, v] of Object.entries(obj)) await store.set(k, v);
+          const raw = JSON.parse(await inp.files[0].text());
+          const settingsObj = raw.settings || raw;
+          const luaScripts = raw.luaScripts;
+          for (const [k, v] of Object.entries(settingsObj)) {
+            if (k === "_meta") continue;
+            await store.set(k, v);
+          }
+          if (Array.isArray(luaScripts)) {
+            await new Promise((res) => chrome.storage.local.set({ luaScripts }, res));
+          }
           this.settings = await store.getAll();
-          toast("Settings imported");
+          toast("Config imported");
           this.navigate(this.page);
         } catch { toast("Invalid file", true); }
       };
@@ -425,7 +441,7 @@ class OptionsApp {
     const quick = document.createElement("div");
     quick.className = "section";
     quick.innerHTML = `<div class="section-title">◈ Quick Toggles</div>`;
-    for (const [key, label] of [["auto.enabled", "Auto Move"], ["handbrain.enabled", "Hand & Brain"], ["queue.enabled", "Auto Queue"], ["ui.hud", "In-game HUD"], ["ex.tts", "Text-to-speech moves"]]) {
+    for (const [key, label] of [["auto.enabled", "Auto Move"], ["handbrain.enabled", "Hand & Brain"], ["queue.enabled", "Auto Queue"], ["ui.hud", "In-game HUD"], ["ov.externalEnabled", "Stream-Proof Overlay"], ["ex.tts", "Text-to-speech moves"]]) {
       quick.appendChild(this._boolRow({ key, label }));
     }
     main.appendChild(quick);
@@ -473,8 +489,7 @@ class OptionsApp {
       section.className = "section";
       section.innerHTML = `<div class="section-title">◈ ${groupName ? groupName[0].toUpperCase() + groupName.slice(1) : cat.label}</div>`;
       for (const item of items) section.appendChild(this._settingRow(item));
-      // the chance of playing the best move is whatever the sliders above leave
-      // over, so it gets shown rather than being left for the user to work out
+
       if (groupName === "mistakes") section.appendChild(this._mistakeSummary());
       main.appendChild(section);
     }
@@ -490,9 +505,6 @@ class OptionsApp {
     }
   }
 
-  // Live readout of where auto move's picks actually land. It reuses the real
-  // Humanizer so the numbers cannot drift away from what the game does, and it
-  // covers the whole pool rather than stopping at the third best move.
   _mistakeSummary() {
     const wrap = document.createElement("div");
     wrap.className = "dist";
@@ -509,8 +521,7 @@ class OptionsApp {
       const d = hum.distribution(pool);
       const pct = (n) => `${(n * 100).toFixed(1)}%`;
       const ordinal = (n) => ["", "Best", "2nd", "3rd"][n] || `${n}th`;
-      // the best move always stays listed, even at zero, because its absence is
-      // the single most important thing these sliders can accidentally cause
+
       const parts = [
         { label: "Best move", value: d.best, cls: "good", keep: true },
         ...d.ranks.map((v, i) => ({ label: ordinal(i + 2), value: v, cls: "" })),
@@ -544,7 +555,6 @@ class OptionsApp {
     else if (item.type === "color") row = this._colorRow(item);
     else row = this._textRow(item);
 
-    // sliders use .slider-head, everything else uses .set-label
     const labelEl = row.querySelector(".set-label") || row.querySelector(".l")?.parentElement;
     if (labelEl && helpFor(item)) {
       this._attachTip(labelEl, item);
@@ -1098,51 +1108,70 @@ class OptionsApp {
     const upload = document.createElement("button");
     upload.className = "btn";
     upload.textContent = "+ Upload polyglot book (.bin)";
-    upload.onclick = () => {
-      // The picker input must live in the document. A detached input can be
-      // collected before the user finishes choosing a file, and then the
-      // change event never arrives and the button appears to do nothing.
-      const inp = document.createElement("input");
-      inp.type = "file";
-      inp.accept = ".bin,application/octet-stream";
-      inp.multiple = true;
-      inp.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;opacity:0";
-      document.body.appendChild(inp);
+    upload.style.cursor = "pointer";
 
-      const cleanup = () => { try { inp.remove(); } catch {} };
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".bin,application/octet-stream";
+    inp.multiple = true;
+    inp.style.display = "none";
+    upload.addEventListener("click", (e) => { e.preventDefault(); inp.click(); });
 
-      inp.addEventListener("change", async () => {
-        const files = [...(inp.files || [])];
-        cleanup();
-        if (!files.length) return;
+    inp.addEventListener("change", async () => {
+      const files = [...(inp.files || [])];
+      inp.value = "";
+      if (!files.length) return;
 
-        let ok = 0;
-        const failed = [];
-        for (const f of files) {
-          try {
-            const buf = await f.arrayBuffer();
-            // every polyglot entry is exactly 16 bytes
-            if (!buf.byteLength || buf.byteLength % 16 !== 0) {
-              failed.push(`${f.name}: not a polyglot .bin (${buf.byteLength} bytes)`);
-              continue;
-            }
-            await putBook(f.name.replace(/\.bin$/i, ""), buf, "opening");
-            ok++;
-          } catch (err) {
-            failed.push(`${f.name}: ${err?.message || err}`);
+      let ok = 0;
+      const failed = [];
+      for (const f of files) {
+        try {
+          const buf = await f.arrayBuffer();
+
+          if (!buf.byteLength || buf.byteLength % 16 !== 0) {
+            failed.push(`${f.name}: not a polyglot .bin (${buf.byteLength} bytes)`);
+            continue;
           }
+          await putBook(f.name.replace(/\.bin$/i, ""), buf, "opening");
+          ok++;
+        } catch (err) {
+          failed.push(`${f.name}: ${err?.message || err}`);
         }
+      }
 
-        if (ok) toast(`${ok} book${ok === 1 ? "" : "s"} added`);
-        for (const msg of failed.slice(0, 3)) toast(msg, true);
-        if (ok) this._pageBooks(main);
-      });
+      if (ok) toast(`${ok} book${ok === 1 ? "" : "s"} added`);
+      for (const msg of failed.slice(0, 3)) toast(msg, true);
+      if (ok) this._pageBooks(main);
+    });
 
-      // fires when the dialog is dismissed without choosing anything
-      inp.addEventListener("cancel", cleanup);
-      inp.click();
-    };
+    const dropZone = document.createElement("div");
+    dropZone.className = "section";
+    dropZone.style.cssText = "border:2px dashed var(--border,#3a3a4a);border-radius:10px;padding:18px;text-align:center;color:var(--text-muted);font-size:12.5px;cursor:pointer;transition:all .2s; margin-top:8px";
+    dropZone.textContent = "Drag & drop .bin files here, or click to browse";
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.style.borderColor = "var(--accent,#4ade80)"; dropZone.style.background = "rgba(74,222,128,0.05)"; });
+    dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "var(--border,#3a3a4a)"; dropZone.style.background = ""; });
+    dropZone.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = "var(--border,#3a3a4a)";
+      dropZone.style.background = "";
+      const files = [...e.dataTransfer.files].filter(f => /\.bin$/i.test(f.name) || f.type === "application/octet-stream");
+      if (!files.length) { toast("No .bin files found", true); return; }
+      let ok = 0; const failed = [];
+      for (const f of files) {
+        try {
+          const buf = await f.arrayBuffer();
+          if (!buf.byteLength || buf.byteLength % 16 !== 0) { failed.push(`${f.name}: not a polyglot .bin`); continue; }
+          await putBook(f.name.replace(/\.bin$/i, ""), buf, "opening");
+          ok++;
+        } catch (err) { failed.push(`${f.name}: ${err?.message || err}`); }
+      }
+      if (ok) toast(`${ok} book${ok === 1 ? "" : "s"} added`);
+      for (const msg of failed.slice(0, 3)) toast(msg, true);
+      if (ok) this._pageBooks(main);
+    });
+    dropZone.addEventListener("click", () => inp.click());
     card.appendChild(upload);
+    card.appendChild(dropZone);
     main.appendChild(card);
 
     const remote = document.createElement("div");

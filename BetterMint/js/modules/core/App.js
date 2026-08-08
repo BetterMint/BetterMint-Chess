@@ -16,7 +16,7 @@ import { EloMatch } from "../features/EloMatch.js";
 import { OverlayWindow } from "../features/OverlayWindow.js";
 import { Exploits } from "../features/Exploits.js";
 import { Privacy } from "../features/Privacy.js";
-import { Coach } from "../features/Coach.js";
+import { Coach, COACH_VOICE_MAP } from "../features/Coach.js";
 import { rankColor, rankAlpha } from "../ui/RankColors.js";
 import { ScriptManager } from "../lua/ScriptManager.js";
 
@@ -32,7 +32,6 @@ class EventBus {
     this._map.get(name)?.forEach((fn) => { try { fn(data); } catch {} });
   }
 }
-
 
 const START_BOARD = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 
@@ -67,6 +66,8 @@ export class App {
     this._debug = false;
     this._rankedPicked = null;
     this._toasts = [];
+    this._lastRanked = null;
+    this._oppAnalysis = { matches: 0, total: 0, warned: false };
   }
 
   async init() {
@@ -95,6 +96,11 @@ export class App {
     await this.scripts.init();
     this.autoQueue.start(this.hostKind);
     this._startFenWatcher();
+    const adopted = () => {
+      this._syncOverlayWindow();
+      this._refreshActions();
+    };
+    if (this.overlayWindow.restore(adopted)) adopted();
     this.log("app initialized on", this.hostKind, "- engines idle until a board is found");
   }
 
@@ -154,8 +160,6 @@ export class App {
     return bytes.buffer;
   }
 
-  // EngineWS is reached at whatever address the socket setting points at, not a
-  // fixed one, and its API is token protected, so both have to come from there.
   _engineWsHttp() {
     try {
       const u = new URL(this.settings.get("engine.wsUrl"));
@@ -181,16 +185,13 @@ export class App {
           if (isTb) endpoint = `${ws.base}/api/tablebase?fen=${fenMatch ? fenMatch[1] : ""}${tok}`;
         }
         if (endpoint) {
-          // through the extension, because a site's connect-src otherwise
-          // blocks the page from reaching a local server at all
+
           const data = await this.settings.proxyFetchJson(endpoint, timeout);
           if (data && !data.error) return data;
         }
       } catch {}
     }
-    // Lichess started requiring a token on the opening explorer in March 2026,
-    // so without one those lookups come back 401 no matter who asks. The
-    // tablebase is unaffected and still needs no token.
+
     let headers = null;
     if (/explorer\.lichess\.(ovh|org)/.test(url)) {
       const token = String(this.settings.get("book.lichessToken") || "").trim();
@@ -252,6 +253,10 @@ export class App {
       const lines = Number(this.settings.get(linesKey(e.key))) || 0;
       const existing = this.engineManager.engines.get(e.name);
       if (want && !existing) {
+        if (e.needsSharedArrayBuffer && typeof SharedArrayBuffer === "undefined") {
+          this.log("built-in engine", e.key, "skipped: SharedArrayBuffer not available");
+          continue;
+        }
         const ok = await this.engineManager.addLocalEngine(e.name, priority, e.key);
         this.log("built-in engine", e.key, ok ? "started" : "failed");
         if (ok) {
@@ -287,15 +292,18 @@ export class App {
     if (!eng) return;
     const opts = eng.uciOptions || [];
     if (opts.some((o) => o.name === "Threads")) {
-      eng.setOption("Threads", clampToOption(opts, "Threads", this.settings.get("engine.threads")));
+      let threads = this.settings.get("engine.threads");
+      if (eng.type === "local" && typeof SharedArrayBuffer === "undefined") threads = 1;
+      eng.setOption("Threads", clampToOption(opts, "Threads", threads)).catch(() => {});
     }
     if (opts.some((o) => o.name === "Hash")) {
       let hash = Number(this.settings.get("engine.hash"));
       if (eng.type === "local") {
-        const cap = Number(this.settings.get("engine.wasmHashCap")) || 64;
+        let cap = Number(this.settings.get("engine.wasmHashCap")) || 32;
+        if (this._isMobile()) cap = Math.min(cap, Number(this.settings.get("stealth.mobileHashCap")) || 16);
         hash = Math.min(hash, cap);
       }
-      eng.setOption("Hash", clampToOption(opts, "Hash", hash));
+      eng.setOption("Hash", clampToOption(opts, "Hash", hash)).catch(() => {});
     }
     this.engineManager.applyOptionValues(engineName, this._engineOptionValues(engineName));
   }
@@ -310,7 +318,7 @@ export class App {
         depth,
         this.settings.get("engine.depth"),
       );
-      // raw (side-to-move) values stay here: the coach and humanizer need them
+
       this._lastEval = { scoreCp, scoreMate, depth };
       this._syncOverlayWindow();
     });
@@ -330,9 +338,9 @@ export class App {
     this.overlay.attach(this.boardCandidate.el, this.boardCandidate.flipped);
     this.hud.mount();
     this.hud.refreshPosition();
+    this.hud.setFlipped(this.boardCandidate.flipped);
     this.events.emit("boardfound", { host: result.host });
-    // a reload leaves the stream-proof window on screen with a dead position,
-    // so it is picked back up rather than left stranded
+
     const adopted = () => {
       this._syncOverlayWindow();
       this._refreshActions();
@@ -353,10 +361,6 @@ export class App {
     let pending = null;
     let stable = 0;
 
-    // Boards animate their moves. Reading the piece layer mid-flight produces
-    // positions that never existed (a piece vanished, nothing arrived yet),
-    // which broke move detection and therefore the coach. Only accept a
-    // position once it has read the same twice in a row.
     this._fenTimer = setInterval(() => {
       if (!this.boardCandidate) return;
       const fen = this.detector.extractFEN(this.boardCandidate);
@@ -380,9 +384,6 @@ export class App {
     }, 180);
   }
 
-  // A board read taken mid-render or mid-animation can be missing pieces. Such
-  // a position is not legal, and feeding it to the engines, the book lookups
-  // and the coach yields both nonsense and thrown errors.
   _fenPlausible(fen) {
     const placement = String(fen).split(/\s+/)[0] || "";
     let white = 0;
@@ -394,11 +395,6 @@ export class App {
     return white === 1 && black === 1;
   }
 
-  // Auto-move only gets a chance to run when the FEN changes or when fresh
-  // engine results arrive. If a move silently fails to register, neither
-  // happens again, so auto-move looks like it randomly stopped and only a
-  // manual move revives it. This notices that we are sitting on our own turn
-  // with analysis ready and nothing played, and gives it another go.
   _checkAutoMoveStall() {
     if (!this.settings.get("auto.enabled") || !this.currentFen) return;
     if (this.autoMove._busy || this.autoMove._timer) return;
@@ -419,7 +415,6 @@ export class App {
     this._autoStallSince = Date.now();
     this.log("auto-move idle on our turn - retry", this._autoStallTries);
 
-    // clear the one-shot guard so this position can be attempted again
     this.autoMove._lastPlayedFen = null;
     this.autoMove.consider({
       fen: this.currentFen,
@@ -437,8 +432,7 @@ export class App {
   _checkAnalysisStall() {
     if (!this.settings.get("auto.enabled") || !this.currentFen) return;
     if (!this.isOurTurn() || this.autoMove._busy) return;
-    // while the book is answering the engines are deliberately idle and have
-    // no results, which is not a stall
+
     if (!this._engineAnswering) return;
     const since = this._analyzeStartedAt ? Date.now() - this._analyzeStartedAt : 0;
     if (since < 8000) return;
@@ -458,15 +452,13 @@ export class App {
     if (prevFen && prevFen !== fen) this._queueCoachReport(prevFen, fen);
     try { this.chess.load(fen); } catch {}
     this._bindCoachToGame();
+    this._maybeEmitGameOver();
     this.events.emit("fen", { fen });
     this._syncVariant(fen);
     this._maybeApplyEloMatch();
+    this._trackOppAnalysis(prevFen, fen);
     try {
-      // Boards rebuilt from the piece layer carry no real move counters, so
-      // every FEN claims fullmove 1. Deriving "new game" from the ply made
-      // this fire on every white-to-move position, which reset the engines
-      // and wiped the coach's history mid-game. The starting position itself
-      // is the only reliable signal.
+
       const atStart = String(fen).split(" ")[0] === START_BOARD;
       if (atStart && this._hadMoves) {
         this.events.emit("newgame", {});
@@ -474,6 +466,8 @@ export class App {
         this.engineManager.newGameAll();
         this.autoMove.newGame();
         this.coach.resetGame();
+        this._oppAnalysis = { matches: 0, total: 0, warned: false };
+        this._lastRanked = null;
       }
       this._hadMoves = !atStart;
     } catch {}
@@ -485,6 +479,7 @@ export class App {
     const fen = this.currentFen;
 
     this.overlay.setFlipped(this.boardCandidate.flipped);
+    this.hud.setFlipped(this.boardCandidate.flipped);
 
     const bookQuery = await this.bookManager.queryLines(fen);
     this.lastBookQuery = bookQuery;
@@ -508,8 +503,7 @@ export class App {
       this._considerCloudEval(fen).catch(() => {});
     } else {
       this.engineManager.stopAll();
-      // the engines are not answering for this position, so their previous
-      // answer must not be left standing as if they were
+
       this.engineManager.clearAnalysis(fen);
       this._lastEval = null;
     }
@@ -522,7 +516,7 @@ export class App {
     if (this.isOurTurn() && !this.handBrain.blocksAuto) {
       const movesForAuto = this.engineManager.rankedMoves.length
         ? this.engineManager.rankedMoves
-        : (bookQuery.lines.length ? bookQuery.lines.map((l, i) => ({ move: l.move, rank: i + 1 })) : []);
+        : (bookQuery.lines.length ? bookQuery.lines.filter((l) => l?.move).map((l, i) => ({ move: l.move, rank: i + 1 })) : []);
       this.autoMove.consider({
         fen,
         chess: this.chess,
@@ -563,9 +557,7 @@ export class App {
     if (!targetBoard) return null;
     const direct = this._tryMoveBetween(fenBefore, targetBoard);
     if (direct) return direct;
-    // Generic sites (worldchess and friends) rebuild the FEN from the piece
-    // layer, so side-to-move is inferred and can be wrong. Retry flipped
-    // before giving up, otherwise the coach silently never fires there.
+
     const flipped = this._flipTurn(fenBefore);
     return flipped ? this._tryMoveBetween(flipped, targetBoard) : null;
   }
@@ -583,9 +575,7 @@ export class App {
 
   _queueCoachReport(fenBefore, fenAfter) {
     if (!this.coach.enabled) return;
-    // Prefer the immediately preceding position, but if that one was itself a
-    // skipped/!transient read, fall back to the last position we know the
-    // coach recorded, so a single bad sample does not swallow the grade.
+
     let info = this._moveBetween(fenBefore, fenAfter);
     if (!info && this._lastGoodFen && this._lastGoodFen !== fenBefore) {
       info = this._moveBetween(this._lastGoodFen, fenAfter);
@@ -605,12 +595,14 @@ export class App {
     if (!this.coach.enabled || !this.currentFen || !moves?.length) return;
     let legalCount = null;
     try { legalCount = this.chess.moves().length; } catch {}
+    const lines = this.lastBookQuery?.lines || [];
     this.coach.notePosition(this.currentFen, {
       bestMove: moves[0].move,
       evalCp: moves[0].scoreCp ?? (moves[0].scoreMate != null ? (moves[0].scoreMate > 0 ? 2000 : -2000) : null),
       secondCp: moves[1]?.scoreCp ?? null,
       legalCount,
-      inBook: !!this.lastBookQuery?.lines?.length,
+      inBook: !!lines.length && !lines.every((l) => l.isTablebase),
+      isTablebase: !!lines.length && lines.every((l) => l.isTablebase),
     });
   }
 
@@ -627,28 +619,27 @@ export class App {
     const rep = this.coach.report({ ...p, evalAfter });
     if (!rep) return;
     this.hud.setCoach(rep, this.coach.accuracy());
-    // don't narrate or highlight the opponent's moves as if they were yours
-    if (rep.isOurs) {
+
+    if (rep.isOurs && !rep.alreadyGraded) {
       this.coach.speak(rep);
+      this.overlayWindow.setCoachReport?.(rep);
       this.overlay.addHighlight?.(p.move.slice(2, 4), rep.color, { style: "ring", alpha: 0.9 });
       setTimeout(() => this.overlay.clearHighlights?.(), 2200);
+    } else if (!rep.alreadyGraded) {
+      this.overlayWindow.setCoachReport?.(rep);
     }
   }
 
-  // UCI reports scores from the side-to-move's point of view, so the raw
-  // number flips sign every ply. This converts it to a stable perspective for
-  // display only - internal logic (coach, humanizer) keeps the raw values.
-  // raw engine scores are side-to-move relative; this converts them to
-  // White-relative, which is what an eval bar must always show
   _whiteSign() {
     try { return this.chess.turn() === "w" ? 1 : -1; } catch { return 1; }
   }
 
   _evalSign() {
-    const mode = this.settings.get("ui.evalPerspective") || "white";
+    const mode = this.settings.get("ui.evalPerspective") || "player";
     if (mode === "engine") return 1;
-    let turn = "w";
-    try { turn = this.chess.turn(); } catch {}
+    const fen = this.currentFen || "";
+    const parts = fen.split(" ");
+    const turn = parts[1] || "w";
     if (mode === "white") return turn === "w" ? 1 : -1;
     const ours = this._ourColor() || "w";
     return turn === ours ? 1 : -1;
@@ -656,16 +647,17 @@ export class App {
 
   _spotlightMove(m) {
     if (!m?.move || !this.boardCandidate) return;
+    const uci = this._normalizeUci(m.move);
     const color = this.settings.get("ui.arrowColor1");
     this.overlay.clearArrows();
     this.overlay.clearHighlights();
-    this.overlay.addArrow(m.move.slice(0, 2), m.move.slice(2, 4), color, { label: m.san || "" });
+    this.overlay.addArrow(uci.slice(0, 2), uci.slice(2, 4), color, { label: m.san || "" });
 
-    const pv = Array.isArray(m.pv) ? m.pv.slice(1, 4) : [];
+    const pv = Array.isArray(m.pv) ? m.pv.slice(1, 4).map((u) => this._normalizeUci(u)) : [];
     const dim = this.settings.get("ui.arrowColor3");
     pv.forEach((u, i) => {
       if (!u || u.length < 4) return;
-      this.overlay.addArrow(u.slice(0, 2), u.slice(2, 4), dim, { alphaScale: 0.5 - i * 0.12, style: "book" });
+      this.overlay.addArrow(u.slice(0, 2), u.slice(2, 4), dim, { alphaScale: 0.5 - i * 0.12 });
     });
 
     clearTimeout(this._spotlightTimer);
@@ -696,7 +688,8 @@ export class App {
     const kept = [];
     let dropped = 0;
     for (const m of moves) {
-      const uci = String(m.move || "");
+      const uci = this._normalizeUci(String(m.move || ""));
+      m.move = uci;
       if (legal.has(uci) || legal.has(uci.slice(0, 4))) kept.push(m);
       else dropped++;
     }
@@ -710,6 +703,7 @@ export class App {
     const moves = this._filterLegal(rawMoves || []);
     if (!moves.length) return;
     if (moves.length) this._stallRetries = 0;
+    this._lastRanked = { fen: this.currentFen, moves };
     this._noteCoachPosition(moves);
     this._maybeEmitCoach(this._lastEval?.depth);
     for (const m of moves) {
@@ -748,25 +742,21 @@ export class App {
 
     const cloud = await this.exploits.cloudEval(fen, this.settings.get("engine.multipv"));
     if (!cloud?.lines?.length) return false;
-    // the board may have moved on while we were waiting
+
     if (fen !== this.currentFen) return false;
 
-    // Never fight a local engine that has already searched deeper than the
-    // cloud entry - that was the flicker: two sources overwriting each other.
     const localDepth = this._lastEval?.depth || 0;
     if (this.engineManager.rankedMoves.length && localDepth >= (cloud.depth || 0)) return false;
 
-    // Lichess cloud scores are WHITE-relative; our engines are
-    // side-to-move-relative. Convert so both speak the same language,
-    // otherwise black-to-move positions come out with the sign inverted.
     let turn = "w";
     try { turn = this.chess.turn(); } catch {}
     const toStm = turn === "w" ? 1 : -1;
 
     const moves = cloud.lines.map((l) => {
+      const norm = this._normalizeUci(l.move);
       const cp = l.scoreCp == null ? null : l.scoreCp * toStm;
       const mate = l.scoreMate == null ? null : l.scoreMate * toStm;
-      const m = new RankedMove(l.move, "lichess-cloud", 0, cp, mate, l.pv);
+      const m = new RankedMove(norm, "lichess-cloud", 0, cp, mate, l.pv);
       m.rank = l.rank;
       m.depth = cloud.depth;
       return m;
@@ -788,7 +778,7 @@ export class App {
   _maybeQueuePremove(moves) {
     if (!this.settings.get("ex.premove") || this.isOurTurn()) return;
     const top = moves?.[0];
-    const reply = this.exploits.predictReply(top?.pv);
+    const reply = this._normalizeUci(this.exploits.predictReply(top?.pv));
     if (!reply) return;
     if (this.exploits.setPremove(reply, this._lastEval?.depth)) {
       this.overlay.addArrow(reply.slice(0, 2), reply.slice(2, 4), this.settings.get("ui.arrowColor3"), {
@@ -836,7 +826,7 @@ export class App {
       }
       return;
     }
-    const found = this.eloMatch.detect(this.boardCandidate);
+    const found = await this.eloMatch.detect(this.boardCandidate);
     if (!found?.target) return;
     if (found.target === this._matchedElo) return;
 
@@ -892,9 +882,7 @@ export class App {
       color: rankColor(this.settings, m.rank, deepestRank),
       label: "#" + m.rank,
     }));
-    // the mirrored board has to agree with the real one, so it follows the same
-    // rule rather than the source of the last pick, which lags a position
-    // behind whenever the book is consulted but not played
+
     if (tbLines.length && this.settings.get("tb.preferOverEngine")) {
       const color = this.settings.get("ui.tbArrowColor");
       arrows = tbLines.slice(0, maxArrows).map((l, i) => ({ move: l.move, color, label: "T" + (i + 1) }));
@@ -908,8 +896,7 @@ export class App {
       moves: arrows,
       flipped: this.boardCandidate?.flipped || false,
       mirror: this.settings.get("ov.mirrorBoard"),
-      // text uses the user's chosen perspective; the bar is always
-      // White-relative or it would lie whenever you are playing Black
+
       evalCp: this._lastEval?.scoreCp == null ? null : this._lastEval.scoreCp * this._evalSign(),
       evalMate: this._lastEval?.scoreMate == null ? null : this._lastEval.scoreMate * this._evalSign(),
       evalWhiteCp: this._lastEval?.scoreCp == null ? null : this._lastEval.scoreCp * this._whiteSign(),
@@ -928,10 +915,6 @@ export class App {
     });
   }
 
-  // useBook is left undecided by most callers. Passing false from them meant a
-  // redraw triggered by arriving engine results replaced the book arrows with
-  // engine ones, so the book only ever showed for the instant before the
-  // engines answered.
   _drawBoardHints(bookQuery, useBook = null) {
     if (!this.settings.get("ui.arrows") || (this.handBrain.enabled && this.settings.get("handbrain.hideArrows"))) {
       this.overlay.clearArrows();
@@ -949,7 +932,7 @@ export class App {
     if (bookLeads && bookLines.length && this.settings.get("ui.bookArrows")) {
       const color = this.settings.get("ui.bookArrowColor");
       bookLines.slice(0, maxArrows).forEach((l, i) => {
-        this._drawMove(l.move, color, { style: "book", label: "B" + (i + 1), alphaScale: 1 - i * 0.2 }, i + 1);
+        this._drawMove(l.move, color, { label: "B" + (i + 1), alphaScale: 1 - i * 0.2 }, i + 1);
       });
       return;
     }
@@ -957,7 +940,7 @@ export class App {
     if (tbLines.length && this.settings.get("tb.preferOverEngine") && this.settings.get("ui.tbArrows")) {
       const color = this.settings.get("ui.tbArrowColor");
       tbLines.slice(0, maxArrows).forEach((l, i) => {
-        this._drawMove(l.move, color, { style: "tb", label: "T" + (i + 1) }, i + 1);
+        this._drawMove(l.move, color, { label: "T" + (i + 1) }, i + 1);
       });
       return;
     }
@@ -971,6 +954,7 @@ export class App {
   }
 
   _drawMove(uci, color, opts, rank) {
+    uci = this._normalizeUci(uci);
     const from = uci.slice(0, 2);
     const to = uci.slice(2, 4);
     const mode = this.settings.get("ov.mode");
@@ -982,8 +966,6 @@ export class App {
     }
   }
 
-  // A refresh should not wipe the running accuracy, so the coach is tied to a
-  // stable per-game key and restores whatever it already graded for that game.
   _bindCoachToGame() {
     const key = this.gameKey();
     if (!key || key === this._coachGameKey) return;
@@ -995,9 +977,6 @@ export class App {
     }
   }
 
-  // Identifies the game across a refresh. Sites put a game id in the URL; when
-  // there is not one we fall back to the host plus the board's opening ply so
-  // separate games do not share a tally.
   gameKey() {
     const host = this.hostKind || "generic";
     const path = location.pathname || "";
@@ -1008,19 +987,14 @@ export class App {
     return `${host}.${path.replace(/[^a-z0-9]+/gi, "-").slice(0, 40)}`;
   }
 
-  // Final gate before an auto-move actually fires. The think delay can be
-  // seconds long, so the position must still be the one we decided on and it
-  // must still be our move, otherwise we would be premoving.
   _autoMoveStillValid(atFen, uci) {
     if (atFen && this.currentFen && atFen !== this.currentFen) return false;
     if (!this.isOurTurn()) return false;
     return this.moveIsOurs(uci);
   }
 
-  // Site-independent safety net. Whatever the turn heuristics believe, a move
-  // must be legal in the position on the board right now and must move one of
-  // our own pieces - anything else is a premove or a desync.
   moveIsOurs(uci) {
+    uci = this._normalizeUci(uci);
     if (!uci || uci.length < 4) return false;
     const fen = this.currentFen;
     if (!fen) return false;
@@ -1043,15 +1017,13 @@ export class App {
     const ours = this._ourColor();
     const apiTurn = this.boardCandidate.strategies?.turn?.();
     if (apiTurn) return apiTurn === ours;
-    // Read the side to move straight out of the FEN we are actually
-    // analysing. A stale chess.js instance was letting us believe it was our
-    // move right after playing, which the sites register as a premove.
+
     const stm = String(this.currentFen || "").split(" ")[1];
     if (stm === "w" || stm === "b") return stm === ours;
     try {
       return this.chess.turn() === ours;
     } catch {
-      // never assume it is our move - guessing wrong is a premove
+
       return false;
     }
   }
@@ -1062,7 +1034,58 @@ export class App {
     return this.boardCandidate?.flipped ? "b" : "w";
   }
 
+  _turn(fen) {
+    try {
+      const tmp = new Chess(fen);
+      return tmp.turn();
+    } catch { return null; }
+  }
+
+  _uciBetweenFens(fromFen, toFen) {
+    try {
+      const c = new Chess(fromFen);
+      const legal = c.moves({ verbose: true });
+      for (const m of legal) {
+        const probe = new Chess(fromFen);
+        probe.move(m.san);
+        if (probe.fen() === toFen) return m.from + m.to + (m.promotion || "");
+      }
+    } catch {}
+    return null;
+  }
+
+  _trackOppAnalysis(prevFen, fen) {
+    if (!this.settings.get("ex.oppAnalysis") || !prevFen || !fen) return;
+    const ourColor = this._ourColor();
+    if (!ourColor) return;
+    if (this._turn(fen) !== ourColor) return;
+    if (this._lastRanked?.fen !== prevFen) return;
+    const uci = this._uciBetweenFens(prevFen, fen);
+    if (!uci) return;
+    const top = this._lastRanked.moves?.[0]?.move;
+    if (!top) return;
+    this._oppAnalysis.total++;
+    if (uci === top) this._oppAnalysis.matches++;
+    if (!this._oppAnalysis.warned && this._oppAnalysis.total >= 8 && this._oppAnalysis.matches / this._oppAnalysis.total >= 0.8) {
+      this._oppAnalysis.warned = true;
+      const pct = (100 * this._oppAnalysis.matches / this._oppAnalysis.total).toFixed(0);
+      try { this.toast(`Opponent matched engine top move ${pct}% (${this._oppAnalysis.matches}/${this._oppAnalysis.total})`); } catch {}
+    }
+  }
+
+  _normalizeUci(uci) {
+    if (!uci || uci.length < 4) return uci;
+    const base = uci.slice(0, 4);
+    const rest = uci.slice(4);
+    const standard = {
+      e1h1: "e1g1", e1a1: "e1c1",
+      e8h8: "e8g8", e8a8: "e8c8",
+    }[base];
+    return standard ? standard + rest : uci;
+  }
+
   uciToSan(uci) {
+    uci = this._normalizeUci(uci);
     const fen = this.currentFen || "";
     if (this._sanCacheFen !== fen) {
       this._sanCacheFen = fen;
@@ -1094,17 +1117,15 @@ export class App {
   }
 
   async playMove(uci, { force = false } = {}) {
+    uci = this._normalizeUci(uci);
     if (!this.boardCandidate) return false;
-    // Last line of defence. Every automated path funnels through here, so a
-    // move that is not legally ours right now never reaches the board and can
-    // never be registered as a premove. Manual callers can still force.
+
     if (!force && !this.moveIsOurs(uci)) {
       this.log("refused move", uci, "- not a legal move for us in", this.currentFen);
       return false;
     }
     const c = this.boardCandidate;
-    // chessground-based sites drop untrusted events; without the patch the
-    // move silently never lands, so say so instead of failing quietly.
+
     if (!c.strategies.apiMove && !this._trustPatchActive() && !this._warnedTrust) {
       this._warnedTrust = true;
       this.log("auto-move needs the input trust patch on this site - reload the page after enabling auto move");
@@ -1156,10 +1177,6 @@ export class App {
     const coded = this._ourColor() + letter;
     const visible = (el) => el && el.offsetParent !== null;
 
-    // Chessground's overlay (World Chess and friends) is a <cg-promotion>
-    // holding one element per choice classed by colour+letter, e.g. "bq".
-    // It is toggled with visibility, so offsetParent stays non-null and the
-    // usual visibility test does not apply.
     for (const host of document.querySelectorAll("cg-promotion")) {
       if (getComputedStyle(host).visibility === "hidden") continue;
       for (const el of host.querySelectorAll("*")) {
@@ -1307,6 +1324,8 @@ export class App {
     const first = !Object.keys(prev).length;
     this._appliedSig = sig;
 
+    const preset = this.settings.get("hum.preset");
+    if (preset && preset !== "custom") this.humanizer.applyPreset(preset);
     const humKeys = {
       meanMs: "hum.meanMs", stdMs: "hum.stdMs", minMs: "hum.minMs", maxMs: "hum.maxMs",
       timePressureCutoffMs: "hum.timePressureCutoffMs", timePressureFactor: "hum.timePressureFactor",
@@ -1315,12 +1334,13 @@ export class App {
       blunderCooldownMoves: "hum.blunderCooldownMoves", evalSwingThreshold: "hum.evalSwingThreshold",
       openingInstantPlies: "hum.openingInstantPlies", stealthInput: "hum.stealthInput",
     };
+    const skipPreset = new Set(["meanMs", "stdMs", "blunderChance", "rank2Chance", "rank3Chance"]);
     for (const [prop, key] of Object.entries(humKeys)) {
+      if (preset && preset !== "custom" && skipPreset.has(prop)) continue;
       this.humanizer[prop] = this.settings.get(key);
     }
     this.humanizer.enabled = this.settings.get("hum.enabled");
 
-    // re-apply the stored eval so a perspective change takes effect at once
     if (this._lastEval) {
       const sign = this._evalSign();
       this.hud.setEval(
@@ -1383,7 +1403,45 @@ export class App {
     this._refreshActions();
     this.overlay.render();
     if (this.boardCandidate) this._drawBoardHints(this.lastBookQuery);
+    const extEnabled = !!s.get("ov.externalEnabled");
+    if (extEnabled && !this.overlayWindow.isOpen) this.overlayWindow.open();
+    if (!extEnabled && this.overlayWindow.isOpen) this.overlayWindow.close();
+    if (this.overlayWindow.isOpen) this.overlayWindow.refreshTheme();
     if (!first) this.hud.flashSync();
+  }
+
+  _isMobile() {
+    try {
+      const ua = navigator.userAgent || "";
+      if (/Android|iPhone|iPad|iPod|Mobile|CriOS/i.test(ua)) return true;
+      if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) return true;
+      return false;
+    } catch { return false; }
+  }
+
+  _maybeEmitGameOver() {
+    try {
+      if (!this.chess || typeof this.chess.isGameOver !== "function") return;
+      if (!this.chess.isGameOver()) return;
+      let reason = "draw";
+      let result = "1/2-1/2";
+      if (this.chess.isCheckmate()) {
+        reason = "checkmate";
+        result = this.chess.turn() === "w" ? "0-1" : "1-0";
+      } else if (this.chess.isStalemate()) {
+        reason = "stalemate";
+      } else if (this.chess.isThreefoldRepetition()) {
+        reason = "threefold";
+      } else if (this.chess.isInsufficientMaterial()) {
+        reason = "insufficient";
+      } else if (this.chess.isDraw()) {
+        reason = "draw";
+      }
+      if (this._lastGameOverFen !== this.currentFen) {
+        this._lastGameOverFen = this.currentFen;
+        this.events.emit("gameover", { result, reason, fen: this.currentFen });
+      }
+    } catch {}
   }
 
   _refreshActions() {
@@ -1440,6 +1498,20 @@ export class App {
     if (this.settings.get("ex.tts")) {
       const msg = new SpeechSynthesisUtterance(this.uciToSan(uci));
       msg.volume = this.settings.get("ex.ttsVolume");
+      const coach = this.coach?.getCoachData?.();
+      if (coach) {
+        const voiceMap = COACH_VOICE_MAP?.[coach.voiceId];
+        const override = String(this.settings.get("coach.ttsVoice") || "").trim();
+        if (override) {
+          const v = this.coach.voices().find((v) => v.name.toLowerCase().includes(override.toLowerCase()));
+          if (v) msg.voice = v;
+        } else if (voiceMap?.name) {
+          const v = this.coach.voices().find((v) => v.name.toLowerCase().includes(voiceMap.name.toLowerCase()));
+          if (v) msg.voice = v;
+        }
+        msg.rate = Number(this.settings.get("coach.ttsRate")) || voiceMap?.rate || 1.05;
+        msg.pitch = Number(this.settings.get("coach.ttsPitch")) || voiceMap?.pitch || 1;
+      }
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(msg);
     }

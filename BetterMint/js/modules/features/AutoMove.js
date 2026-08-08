@@ -47,8 +47,7 @@ export class AutoMove {
   async consider({ fen, chess, rankedMoves, bookPick, playMove, ourTurn, ourColor, timePressure = false, premove = null, verify = null }) {
     if (!this.enabled || this._busy || !rankedMoves?.length && !bookPick) return;
     if (fen && fen === this._lastPlayedFen) return;
-    // Moving when it is not our turn is a premove, never something we want by
-    // accident, so this guard is unconditional rather than opt-in.
+
     if (!ourTurn) return;
     if (ourColor === "w" && !this.settings.get("auto.playWhite")) return;
     if (ourColor === "b" && !this.settings.get("auto.playBlack")) return;
@@ -56,7 +55,8 @@ export class AutoMove {
     let chosen = null;
     let source = "engine";
     if (bookPick && this.settings.get("book.preferOverEngine")) {
-      chosen = bookPick.line.move;
+      chosen = bookPick?.line?.move;
+      if (!chosen) return;
       source = "book";
     } else if (this.settings.get("auto.useHumanizer") && this.humanizer.enabled) {
       const pick = this.humanizer.pickMove(rankedMoves, this._poolSize(rankedMoves.length));
@@ -94,8 +94,7 @@ export class AutoMove {
       this._timer = null;
       this._pendingFen = null;
       try {
-        // the board can move under us during the think delay, so confirm the
-        // position and the turn are still what we decided on
+
         if (verify && !verify(fen, chosen)) {
           this._lastPlayedFen = null;
           return;

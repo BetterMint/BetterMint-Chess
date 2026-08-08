@@ -154,7 +154,9 @@ class UciEngine {
     if (!this.alive) return;
     this.busy = true;
     const mpv = this.linesWanted || opts.multipv;
-    if (mpv) await this.setOption("MultiPV", mpv);
+    if (mpv && this.uciOptions.some((o) => o.name === "MultiPV")) {
+      await this.setOption("MultiPV", clampToOption(this.uciOptions, "MultiPV", mpv));
+    }
     this.send("stop");
     this.send(`position fen ${fen}`);
     const depth = this.maxDepth ? Math.min(opts.depth || 15, this.maxDepth) : (opts.depth || 15);
@@ -538,7 +540,7 @@ export class EngineManager {
       let v = raw;
       if (opt?.type === "spin") v = clampToOption(eng.uciOptions, name, Number(raw));
       else if (opt?.type === "check") v = raw === true || raw === "true" ? "true" : "false";
-      eng.setOption(name, v);
+      eng.setOption(name, v).catch(() => {});
     }
   }
 

@@ -12,6 +12,24 @@ export const CLASSES = {
   blunder: { label: "Blunder", icon: "??", color: "#fa412d", weight: 0 },
 };
 
+import { COACHES, findCoach } from "./CoachData.js";
+
+export const COACH_VOICE_MAP = {
+  David_coach:    { name: "David",      locale: "en-US", rate: 1.0,  pitch: 1.0,  gender: "male" },
+  Sloane_coach:   { name: "Samantha",   locale: "en-US", rate: 1.05, pitch: 1.05, gender: "female" },
+  Magnus_coach:   { name: "Google UK English Male", locale: "en-GB", rate: 0.92, pitch: 0.9,  gender: "male" },
+  Levy_coach:     { name: "Alex",       locale: "en-US", rate: 1.12, pitch: 1.0,  gender: "male" },
+  Calvin_coach:   { name: "Daniel",     locale: "en-US", rate: 1.08, pitch: 1.08, gender: "male" },
+  Anna_coach:     { name: "Victoria",   locale: "en-US", rate: 1.02, pitch: 1.05, gender: "female" },
+  Tania_coach:    { name: "Karen",      locale: "en-US", rate: 1.04, pitch: 1.0,  gender: "female" },
+  Danny_coach:    { name: "Tom",        locale: "en-US", rate: 1.1,  pitch: 0.95, gender: "male" },
+  Botez_coach:    { name: "Samantha",   locale: "en-US", rate: 1.06, pitch: 1.08, gender: "female" },
+  Ben_coach:      { name: "Arthur",     locale: "en-US", rate: 0.92, pitch: 0.88, gender: "male" },
+  Anand_coach:    { name: "Rishi",      locale: "en-US", rate: 0.95, pitch: 0.95, gender: "male" },
+};
+
+const CHESS_AUDIO_BASE = "https://text-and-audio.chess.com/prod/released";
+
 const TIPS = {
   brilliant: [
     "A sacrifice that works. You gave up material and the position still favours you.",
@@ -42,6 +60,69 @@ const TIPS = {
     "Serious error. Check what your opponent threatens now.",
     "This loses material or the game. Always scan captures and checks.",
   ],
+};
+
+const LEARNING_LINES = {
+  threatWarning: [
+    "Watch out — your opponent is building pressure on the kingside.",
+    "Be careful, there's a tactical threat brewing. Look for checks and captures.",
+    "Your opponent is aiming for a fork. Keep your knight alert.",
+    "The enemy queen is eyeing your weak squares. Stay vigilant.",
+    "There's a pin forming against your knight. Consider breaking it.",
+    "Your opponent's bishop is getting active. Don't let it dominate the diagonal.",
+    "Watch the center — your opponent is trying to seize control.",
+    "There's a discovered attack potential. Be mindful of their piece placement.",
+    "Your king is looking exposed. Consider castling or consolidating.",
+    "Your opponent is setting up a battery. Be ready to sidestep.",
+  ],
+  positionalAdvice: [
+    "Control the center before launching an attack.",
+    "Develop your pieces with purpose — every tempo matters.",
+    "Don't move the same piece twice in the opening.",
+    "Look for weak pawns in their camp you can target.",
+    "Trade pieces when you're ahead in material, keep them when behind.",
+    "Rooks belong on open files. Find one and double up.",
+    "Bishops are stronger in open positions. Keep the diagonal pair.",
+    "A knight on the rim is dim — keep them central.",
+    "Don't rush. Take time to assess threats before committing.",
+    "Every move should answer: what does this do, and what does it stop?",
+  ],
+  oppMoveAlert: [
+    "Your opponent just played a waiting move. They're setting a trap.",
+    "That was a provocative move from your opponent. Don't take the bait.",
+    "Your opponent sacrificed material — calculate carefully before accepting.",
+    "That move weakens their pawn structure. Exploit it later.",
+    "Your opponent is overextending. Stay solid and let them over-commit.",
+  ],
+};
+
+const SUPPORTIVE_LINES = {
+  encouragement: [
+    "Great move! You're playing with confidence today.",
+    "Stay focused — you've got this. Trust your calculation.",
+    "Nice find! That's the kind of move that wins games.",
+    "Don't worry about that last one. Reset and keep fighting.",
+    "You're improving every game. Keep it up!",
+    "That was a tough position but you handled it well.",
+    "Believe in yourself. Your instincts are getting sharper.",
+    "Every move is a chance to learn. You're doing great.",
+    "Keep the pressure on — your opponent is feeling it.",
+    "That's the spirit! Play your game, not theirs.",
+  ],
+  movePraise: {
+    brilliant: ["Absolutely brilliant! That's a master-class sacrifice.", "What a move! You saw something special there."],
+    great_find: ["Great find! Not many players would spot that.", "Excellent — that was the only move that kept the edge."],
+    best: ["That's the engine's top choice. You're thinking like a computer!", "Perfect move. Right on the money."],
+    excellent: ["Very strong play. You're in control here.", "Excellent choice — barely anything better."],
+    good: ["Solid move. You're keeping your position healthy.", "Good instinct. No complaints from me."],
+    book: ["Book move! You know your theory well.", "Right out of the textbook. Well prepared."],
+  },
+  moveConsolation: {
+    inaccuracy: ["Small slip, but the position is still playable. Keep going.", "Not your best, but don't let it rattle you."],
+    mistake: ["That stings, but we can still fight back. Stay focused.", "One mistake doesn't lose the game. Regroup."],
+    missed_win: ["You missed a winning line, but there's more chances coming.", "So close! Keep looking for those tactics."],
+    blunder: ["Tough break. But every champion bounces back. Let's go.", "That's a hard one to swallow. Shake it off and play on."],
+  },
 };
 
 function pick(list, seed) {
@@ -174,7 +255,7 @@ export class Coach {
     return this.siteLabel(`insights.${cls}`) || base.label;
   }
 
-  notePosition(fen, { bestMove, evalCp, secondCp, legalCount, inBook } = {}) {
+  notePosition(fen, { bestMove, evalCp, secondCp, legalCount, inBook, isTablebase } = {}) {
     if (!fen) return;
     const prev = this._positions.get(fen) || {};
     this._positions.set(fen, {
@@ -183,6 +264,7 @@ export class Coach {
       secondCp: secondCp ?? prev.secondCp ?? null,
       legalCount: legalCount ?? prev.legalCount ?? null,
       inBook: inBook ?? prev.inBook ?? false,
+      isTablebase: isTablebase ?? prev.isTablebase ?? false,
     });
     if (this._positions.size > 400) {
       this._positions.delete(this._positions.keys().next().value);
@@ -192,12 +274,14 @@ export class Coach {
   classify({ before, after, move, played, materialDelta }) {
     if (!before || before.evalCp == null || after == null) return null;
 
+    if (before.isTablebase) return null;
+    if (before.inBook) return null;
+
     const bestCp = before.evalCp;
     const playedCp = -after;
     const loss = bestCp - playedCp;
 
     if (before.legalCount === 1) return "forced";
-    if (before.inBook) return "book";
 
     const isBest = move && before.bestMove && move === before.bestMove;
 
@@ -231,6 +315,12 @@ export class Coach {
       ? Math.max(0, Math.round(before.evalCp - -evalAfter))
       : null;
 
+    const coach = this.getCoachData();
+    const sign = coach?.name ? ` — ${coach.name}` : "";
+    const modeParts = this._modeParts({ cls, isOpponent: !isOurs });
+    const supportiveLine = modeParts.supportive.join(" ").trim() || "";
+    const learningLine = modeParts.learning.join(" ").trim() || "";
+    const modeLine = [supportiveLine, learningLine].filter(Boolean).join(" ");
     const report = {
       cls,
       label: this.labelFor(cls),
@@ -243,6 +333,9 @@ export class Coach {
       lossCp,
       tip: this.settings.get("coach.showTips") ? pick(TIPS[cls], seed) : "",
       showBetter: this.settings.get("coach.suggestBetter") && cls !== "best" && cls !== "brilliant" && !!bestSan,
+      supportiveLine,
+      learningLine,
+      modeLine: modeLine ? modeLine + sign : "",
       at: Date.now(),
     };
 
@@ -256,6 +349,7 @@ export class Coach {
     // optional and must never pollute the player's score.
     report.isOurs = isOurs;
     report.counted = !already;
+    report.alreadyGraded = already;
 
     // Score this single move on the win-percentage scale so the running
     // average is a real game accuracy rather than a label count.
@@ -316,26 +410,118 @@ export class Coach {
     try { return window.speechSynthesis?.getVoices?.() || []; } catch { return []; }
   }
 
+  getCoachData() {
+    const id = this.settings.get("coach.select");
+    return findCoach(id) || COACHES[0];
+  }
+
+  _bestVoice(voiceMap) {
+    const voices = this.voices();
+    if (!voices.length) return null;
+    const override = String(this.settings.get("coach.ttsVoice") || "").trim();
+    if (override) {
+      const m = voices.find((v) => v.name.toLowerCase().includes(override.toLowerCase()));
+      if (m) return m;
+    }
+    if (voiceMap.name) {
+      const m = voices.find((v) => v.name.toLowerCase().includes(voiceMap.name.toLowerCase()));
+      if (m) return m;
+    }
+    if (voiceMap.gender) {
+      const g = voiceMap.gender.toLowerCase();
+      const hints = g === "female"
+        ? ["female", "samantha", "victoria", "karen", "zira", "susan", "allison", "ava"]
+        : ["male", "david", "alex", "daniel", "tom", "fred", "arthur", "rishi", "oliver"];
+      for (const h of hints) {
+        const m = voices.find((v) => v.name.toLowerCase().includes(h));
+        if (m) return m;
+      }
+    }
+    if (voiceMap.locale) {
+      const sameLocale = voices.filter((v) => (v.lang || "").toLowerCase().startsWith(voiceMap.locale.toLowerCase()));
+      if (sameLocale.length) return sameLocale[0];
+    }
+    return voices.find((v) => (v.lang || "").startsWith("en")) || voices[0];
+  }
+
+  _audioCache = new Map();
+  _audioEl = null;
+
+  async _playChessAudio(hash) {
+    if (!hash) return false;
+    const coach = this.getCoachData();
+    const voiceId = coach?.voiceId;
+    const locale = coach?.locale || "en-US";
+    if (!voiceId) return false;
+    const url = `${CHESS_AUDIO_BASE}/${voiceId}/${locale}/${hash}.mp3`;
+    if (this._audioCache.has(url)) {
+      this._audioCache.get(url).play();
+      return true;
+    }
+    try {
+      const resp = await fetch(url, { method: "HEAD" });
+      if (!resp.ok) return false;
+      const audio = new Audio(url);
+      audio.volume = Number.isFinite(Number(this.settings.get("coach.ttsVolume")))
+        ? Number(this.settings.get("coach.ttsVolume")) : 0.85;
+      this._audioCache.set(url, audio);
+      this._audioEl = audio;
+      audio.onplay = () => { this.app.hud?.setCoachTalking?.(true); };
+      audio.onended = () => { this.app.hud?.setCoachTalking?.(false); this._audioEl = null; };
+      audio.onerror = () => { this.app.hud?.setCoachTalking?.(false); this._audioEl = null; };
+      await audio.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  _utter(text, voiceMap, volume = 0.85) {
+    const synth = window.speechSynthesis;
+    if (!synth || !text) return null;
+    const u = new SpeechSynthesisUtterance(text);
+    const v = this._bestVoice(voiceMap);
+    if (v) u.voice = v;
+    u.rate = Number(this.settings.get("coach.ttsRate")) || voiceMap.rate || 1.05;
+    u.pitch = Number(this.settings.get("coach.ttsPitch")) || voiceMap.pitch || 1;
+    u.volume = Number.isFinite(Number(this.settings.get("coach.ttsVolume"))) ? Number(this.settings.get("coach.ttsVolume")) : volume;
+    return u;
+  }
+
   speak(report) {
     if (!report || !this.settings.get("coach.speak")) return;
     if (this.settings.get("coach.speakOnlyBad") && !Coach.BAD.has(report.cls)) return;
     try {
+      const coach = this.getCoachData();
+      const voiceMap = COACH_VOICE_MAP[coach.voiceId] || {};
+
+      this._lastModeLine = report.modeLine || null;
+
+      if (report.audioUrlHash) {
+        this._playChessAudio(report.audioUrlHash).then((ok) => { if (ok) return; this._speakFallback(report, coach, voiceMap); });
+        return;
+      }
+      this._speakFallback(report, coach, voiceMap);
+    } catch {}
+  }
+
+  _speakFallback(report, coach, voiceMap) {
+    try {
       const synth = window.speechSynthesis;
       if (!synth) return;
-      let text = report.label;
-      if (this.settings.get("coach.speakTips") && report.tip) text += `. ${report.tip}`;
 
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = Number(this.settings.get("coach.ttsRate")) || 1.05;
-      u.pitch = Number(this.settings.get("coach.ttsPitch")) || 1;
-      const vol = Number(this.settings.get("coach.ttsVolume"));
-      u.volume = Number.isFinite(vol) ? vol : 0.85;
+      const parts = [];
+      if (this.settings.get("coach.speakTips") && report.tip) parts.push(report.tip);
+      if (this.settings.get("coach.supportiveMode") && report.supportiveLine) parts.push(report.supportiveLine);
+      if (this.settings.get("coach.learningMode") && report.learningLine) parts.push(report.learningLine);
 
-      const wanted = String(this.settings.get("coach.ttsVoice") || "").trim().toLowerCase();
-      if (wanted) {
-        const match = this.voices().find((v) => v.name.toLowerCase().includes(wanted));
-        if (match) u.voice = match;
-      }
+      const text = parts.join(" ").trim();
+      if (!text) return;
+      const u = this._utter(text, voiceMap);
+      if (!u) return;
+      u.onstart = () => { this.app.hud?.setCoachTalking?.(true); };
+      u.onend = () => { this.app.hud?.setCoachTalking?.(false); };
+      u.onerror = () => { this.app.hud?.setCoachTalking?.(false); };
       synth.cancel();
       synth.speak(u);
     } catch {}
@@ -343,5 +529,67 @@ export class Coach {
 
   testSpeak() {
     this.speak({ cls: "blunder", label: this.labelFor("blunder"), tip: TIPS.blunder[0] });
+  }
+
+  _speakText(text) {
+    if (!text) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      const coach = this.getCoachData();
+      const voiceMap = COACH_VOICE_MAP[coach.voiceId] || {};
+      const u = this._utter(text, voiceMap);
+      if (!u) return;
+      u.onstart = () => { this.app.hud?.setCoachTalking?.(true); };
+      u.onend = () => { this.app.hud?.setCoachTalking?.(false); };
+      u.onerror = () => { this.app.hud?.setCoachTalking?.(false); };
+      synth.cancel();
+      synth.speak(u);
+    } catch {}
+  }
+
+  _lastModeLine = null;
+
+  _modeParts(report) {
+    const supportive = [];
+    const learning = [];
+    if (this.settings.get("coach.supportiveMode")) {
+      const cls = report?.cls;
+      if (cls && SUPPORTIVE_LINES.movePraise[cls] && !Coach.BAD.has(cls)) {
+        supportive.push(pick(SUPPORTIVE_LINES.movePraise[cls], Date.now() % 1000));
+      } else if (cls && SUPPORTIVE_LINES.moveConsolation[cls]) {
+        supportive.push(pick(SUPPORTIVE_LINES.moveConsolation[cls], Date.now() % 1000));
+      } else if (Math.random() < 0.25) {
+        supportive.push(pick(SUPPORTIVE_LINES.encouragement, Date.now() % 1000));
+      }
+    }
+    if (this.settings.get("coach.learningMode")) {
+      const isOppMove = report?.isOpponent;
+      if (isOppMove && Math.random() < 0.4) {
+        learning.push(pick(LEARNING_LINES.oppMoveAlert, Date.now() % 1000));
+      } else if (Math.random() < 0.3) {
+        learning.push(pick(LEARNING_LINES.threatWarning, Date.now() % 1000));
+      } else if (Math.random() < 0.2) {
+        learning.push(pick(LEARNING_LINES.positionalAdvice, Date.now() % 1000));
+      }
+    }
+    return { supportive, learning };
+  }
+
+  getModeLine(report) {
+    const { supportive, learning } = this._modeParts(report);
+    return [...supportive, ...learning].join(" ").trim();
+  }
+
+  speakMode(report) {
+    if (!this._lastModeLine && report) this._lastModeLine = this.getModeLine(report);
+    return this._lastModeLine || null;
+  }
+
+  getModeLabel() {
+    const modes = [];
+    if (this.settings.get("coach.learningMode")) modes.push("Learning");
+    if (this.settings.get("coach.supportiveMode")) modes.push("Supportive");
+    return modes.join(" + ");
   }
 }
