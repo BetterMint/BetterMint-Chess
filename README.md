@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/BetterMint/BetterMint-Chess/releases/tag/V3.0.1">
-    <img src="https://img.shields.io/github/downloads/BetterMint/BetterMint-Chess/V3.0.1/total?style=flat&label=V3.0.1%20Downloads" alt="Challenge Downloads" />
+    <img src="https://img.shields.io/github/downloads/BetterMint/BetterMint-Chess/V3.0.1/total?style=flat&label=BetterMint%20V3%20Downloads" alt="Challenge Downloads" />
   </a>
   <a href="https://github.com/BetterMint/BetterMint-Chess">
     <img src="https://img.shields.io/github/stars/BetterMint/BetterMint-Chess?style=flat&label=Stars" alt="Repo Stars" />
