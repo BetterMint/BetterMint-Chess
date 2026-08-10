@@ -400,6 +400,29 @@ export class App {
     return white === 1 && black === 1;
   }
 
+  _analysisReady(fen) {
+    const em = this.engineManager;
+    if (!em?.rankedMoves?.length) return false;
+    const targetFen = fen || this.currentFen;
+    let anyBestmove = false;
+    try {
+      for (const e of em.engines.values()) {
+        if (e.alive && e.lastBestmove && e.lastBestmoveFen === targetFen) { anyBestmove = true; break; }
+      }
+    } catch {}
+    if (anyBestmove) return true;
+    // time/node-limited searches are only "ready" once a final bestmove lands
+    if (Number(em.movetime) > 0 || Number(em.nodes) > 0) return false;
+    const target = Number(this.settings.get("engine.depth")) || em.depth || 15;
+    const topDepth = Math.max(0, ...em.rankedMoves.map((m) => m.depth || 0));
+    return topDepth >= target;
+  }
+
+  _autoMovesNow() {
+    if (this._lastRanked && this._lastRanked.fen === this.currentFen) return this._lastRanked.moves;
+    return this.engineManager.rankedMoves;
+  }
+
   _checkAutoMoveStall() {
     if (!this.settings.get("auto.enabled") || !this.currentFen) return;
     if (this.autoMove._busy || this.autoMove._timer) return;
@@ -431,6 +454,8 @@ export class App {
       playMove: (uci) => this.playMove(uci),
       verify: (atFen, uci) => this._autoMoveStillValid(atFen, uci),
       timePressure: this.exploits.opponentInTimePressure(),
+      readyCheck: () => this._analysisReady(this.currentFen),
+      getRankedMoves: () => this._autoMovesNow(),
     });
   }
 
@@ -532,6 +557,8 @@ export class App {
         playMove: (uci) => this.playMove(uci),
         verify: (atFen, uci) => this._autoMoveStillValid(atFen, uci),
         timePressure: this.exploits.opponentInTimePressure(),
+        readyCheck: () => this._analysisReady(fen),
+        getRankedMoves: () => this._autoMovesNow(),
       });
     }
   }
@@ -735,6 +762,8 @@ export class App {
         verify: (atFen, uci) => this._autoMoveStillValid(atFen, uci),
         timePressure: this.exploits.opponentInTimePressure(),
         premove: this.exploits.consumePremove((uci) => moves.some((m) => m.move === uci)),
+        readyCheck: () => this._analysisReady(this.currentFen),
+        getRankedMoves: () => this._autoMovesNow(),
       });
     }
     this._drawBoardHints(this.lastBookQuery);
