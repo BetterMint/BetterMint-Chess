@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BetterMint smoke - wc-chess-board</title>
+<style>
+  body { background: #2b2b3a; margin: 40px; font-family: sans-serif; }
+  wc-chess-board { display: block; width: 400px; height: 400px; position: relative; background: #769656; }
+</style>
+</head>
+<body>
+<wc-chess-board id="board"></wc-chess-board>
+<button id="flip" style="margin-top:12px">toggle flipped</button>
+<div id="moved" style="color:#fff;margin-top:8px"></div>
+<script>
+  const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  const AFTER_E4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1";
+
+  class MockGame {
+    constructor(boardEl) {
+      this._el = boardEl;
+      this.fen = START;
+      this._playingAs = 1;
+    }
+    getFEN() { return this.fen; }
+    getPlayingAs() { return this._playingAs; }
+    getTurn() { return this.fen.includes(" w ") ? 1 : 2; }
+    move(m) {
+      if (this.fen === START && m.from === "e2" && m.to === "e4") this.fen = AFTER_E4;
+      document.getElementById("moved").textContent = "apiMove:" + m.from + m.to + (m.promotion || "");
+      return true;
+    }
+  }
+
+  class WCChessBoard extends HTMLElement {
+    constructor() {
+      super();
+      this.game = new MockGame(this);
+    }
+  }
+  customElements.define("wc-chess-board", WCChessBoard);
+
+  document.getElementById("flip").addEventListener("click", () => {
+    document.getElementById("board").classList.toggle("flipped");
+  });
+</script>
+<script src="../dist/inject.js"></script>
+</body>
+</html>

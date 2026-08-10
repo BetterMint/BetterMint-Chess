@@ -13,19 +13,20 @@ export const CLASSES = {
 };
 
 import { COACHES, findCoach } from "./CoachData.js";
+import { getDefault } from "../settings/SettingsSchema.js";
 
 export const COACH_VOICE_MAP = {
-  David_coach:    { name: "David",      locale: "en-US", rate: 1.0,  pitch: 1.0,  gender: "male" },
-  Sloane_coach:   { name: "Samantha",   locale: "en-US", rate: 1.05, pitch: 1.05, gender: "female" },
-  Magnus_coach:   { name: "Google UK English Male", locale: "en-GB", rate: 0.92, pitch: 0.9,  gender: "male" },
-  Levy_coach:     { name: "Alex",       locale: "en-US", rate: 1.12, pitch: 1.0,  gender: "male" },
-  Calvin_coach:   { name: "Daniel",     locale: "en-US", rate: 1.08, pitch: 1.08, gender: "male" },
-  Anna_coach:     { name: "Victoria",   locale: "en-US", rate: 1.02, pitch: 1.05, gender: "female" },
-  Tania_coach:    { name: "Karen",      locale: "en-US", rate: 1.04, pitch: 1.0,  gender: "female" },
-  Danny_coach:    { name: "Tom",        locale: "en-US", rate: 1.1,  pitch: 0.95, gender: "male" },
-  Botez_coach:    { name: "Samantha",   locale: "en-US", rate: 1.06, pitch: 1.08, gender: "female" },
-  Ben_coach:      { name: "Arthur",     locale: "en-US", rate: 0.92, pitch: 0.88, gender: "male" },
-  Anand_coach:    { name: "Rishi",      locale: "en-US", rate: 0.95, pitch: 0.95, gender: "male" },
+  David_coach:    { name: "David", candidates: ["Microsoft David", "Microsoft Mark", "Microsoft Guy", "David", "Alex", "Fred", "Tom"], locale: "en-US", rate: 1.0,  pitch: 1.0,  gender: "male" },
+  Sloane_coach:   { name: "Samantha", candidates: ["Microsoft Zira", "Microsoft Aria", "Microsoft Jenny", "Samantha", "Allison", "Victoria", "Google US English"], locale: "en-US", rate: 1.05, pitch: 1.05, gender: "female" },
+  Magnus_coach:   { name: "Google UK English Male", candidates: ["Microsoft Ryan", "Microsoft George", "Google UK English Male", "Daniel", "Oliver", "Arthur"], locale: "en-GB", rate: 0.92, pitch: 0.9,  gender: "male" },
+  Levy_coach:     { name: "Alex", candidates: ["Microsoft Mark", "Microsoft Guy", "Alex", "Tom", "Fred"], locale: "en-US", rate: 1.12, pitch: 1.0,  gender: "male" },
+  Calvin_coach:   { name: "Daniel", candidates: ["Microsoft Guy", "Microsoft Mark", "Daniel", "Alex", "Fred"], locale: "en-US", rate: 1.08, pitch: 1.08, gender: "male" },
+  Anna_coach:     { name: "Victoria", candidates: ["Microsoft Zira", "Microsoft Jenny", "Victoria", "Allison", "Samantha", "Google US English"], locale: "en-US", rate: 1.02, pitch: 1.05, gender: "female" },
+  Tania_coach:    { name: "Karen", candidates: ["Microsoft Heera", "Microsoft Zira", "Karen", "Moira", "Tessa", "Google UK English Female"], locale: "en-US", rate: 1.04, pitch: 1.0,  gender: "female" },
+  Danny_coach:    { name: "Tom", candidates: ["Microsoft David", "Microsoft Mark", "Tom", "Fred", "Alex"], locale: "en-US", rate: 1.1,  pitch: 0.95, gender: "male" },
+  Botez_coach:    { name: "Samantha", candidates: ["Microsoft Zira", "Microsoft Aria", "Samantha", "Allison", "Google US English"], locale: "en-US", rate: 1.06, pitch: 1.08, gender: "female" },
+  Ben_coach:      { name: "Arthur", candidates: ["Microsoft Ryan", "Microsoft George", "Arthur", "Oliver", "Google UK English Male"], locale: "en-GB", rate: 0.92, pitch: 0.88, gender: "male" },
+  Anand_coach:    { name: "Rishi", candidates: ["Microsoft Ravi", "Rishi", "Microsoft Prabhat", "Google UK English Male"], locale: "en-IN", rate: 0.95, pitch: 0.95, gender: "male" },
 };
 
 const CHESS_AUDIO_BASE = "https://text-and-audio.chess.com/prod/released";
@@ -406,8 +407,23 @@ export class Coach {
 
   static BAD = new Set(["inaccuracy", "mistake", "missed_win", "blunder"]);
 
+  _voiceCache = null;
+
   voices() {
-    try { return window.speechSynthesis?.getVoices?.() || []; } catch { return []; }
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return [];
+      const list = synth.getVoices?.() || [];
+      if (list.length) {
+        this._voiceCache = list;
+      } else if (!this._voiceCache && !this._voiceWarmHooked) {
+        this._voiceWarmHooked = true;
+        synth.addEventListener?.("voiceschanged", () => {
+          try { this._voiceCache = synth.getVoices?.() || null; } catch {}
+        }, { once: false });
+      }
+      return this._voiceCache || list;
+    } catch { return this._voiceCache || []; }
   }
 
   getCoachData() {
@@ -418,22 +434,27 @@ export class Coach {
   _bestVoice(voiceMap) {
     const voices = this.voices();
     if (!voices.length) return null;
+    const byName = (needle) => voices.find((v) => v.name.toLowerCase().includes(String(needle).toLowerCase()));
     const override = String(this.settings.get("coach.ttsVoice") || "").trim();
     if (override) {
-      const m = voices.find((v) => v.name.toLowerCase().includes(override.toLowerCase()));
+      const m = byName(override);
+      if (m) return m;
+    }
+    for (const c of voiceMap.candidates || []) {
+      const m = byName(c);
       if (m) return m;
     }
     if (voiceMap.name) {
-      const m = voices.find((v) => v.name.toLowerCase().includes(voiceMap.name.toLowerCase()));
+      const m = byName(voiceMap.name);
       if (m) return m;
     }
     if (voiceMap.gender) {
       const g = voiceMap.gender.toLowerCase();
       const hints = g === "female"
-        ? ["female", "samantha", "victoria", "karen", "zira", "susan", "allison", "ava"]
-        : ["male", "david", "alex", "daniel", "tom", "fred", "arthur", "rishi", "oliver"];
+        ? ["female", "zira", "aria", "jenny", "samantha", "victoria", "karen", "susan", "allison", "ava", "sonia", "libby", "heera"]
+        : ["male", "david", "mark", "guy", "ryan", "george", "james", "ravi", "alex", "daniel", "tom", "fred", "arthur", "rishi", "oliver"];
       for (const h of hints) {
-        const m = voices.find((v) => v.name.toLowerCase().includes(h));
+        const m = byName(h);
         if (m) return m;
       }
     }
@@ -482,8 +503,14 @@ export class Coach {
     const u = new SpeechSynthesisUtterance(text);
     const v = this._bestVoice(voiceMap);
     if (v) u.voice = v;
-    u.rate = Number(this.settings.get("coach.ttsRate")) || voiceMap.rate || 1.05;
-    u.pitch = Number(this.settings.get("coach.ttsPitch")) || voiceMap.pitch || 1;
+    const rateVal = Number(this.settings.get("coach.ttsRate"));
+    const pitchVal = Number(this.settings.get("coach.ttsPitch"));
+    u.rate = Number.isFinite(rateVal) && rateVal !== Number(getDefault("coach.ttsRate"))
+      ? rateVal
+      : (voiceMap.rate || (Number.isFinite(rateVal) ? rateVal : 1.05));
+    u.pitch = Number.isFinite(pitchVal) && pitchVal !== Number(getDefault("coach.ttsPitch"))
+      ? pitchVal
+      : (voiceMap.pitch || (Number.isFinite(pitchVal) ? pitchVal : 1));
     u.volume = Number.isFinite(Number(this.settings.get("coach.ttsVolume"))) ? Number(this.settings.get("coach.ttsVolume")) : volume;
     return u;
   }

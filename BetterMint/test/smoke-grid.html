@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BetterMint smoke - fake grid (must NOT mount HUD)</title>
+<style>
+  body { background: #2b2b3a; margin: 40px; }
+  .board { display: grid; grid-template-columns: repeat(8, 50px); width: 400px; height: 400px; }
+  .square-a1, [class*="square"] { background: #769656; }
+  [class*="square"]:nth-child(even) { background: #eeeed2; }
+</style>
+</head>
+<body>
+<div class="board" id="fakeboard"></div>
+<script>
+  const b = document.getElementById("fakeboard");
+  const files = "abcdefgh";
+  for (let r = 8; r >= 1; r--) {
+    for (let f = 0; f < 8; f++) {
+      const d = document.createElement("div");
+      d.className = "square-" + files[f] + r;
+      d.dataset.square = files[f] + r;
+      b.appendChild(d);
+    }
+  }
+</script>
+<script src="../dist/inject.js"></script>
+</body>
+</html>

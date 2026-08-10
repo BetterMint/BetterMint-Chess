@@ -124,6 +124,10 @@ export class App {
   }
 
   luaLog(scriptName, text, isError = false) {
+    try {
+      (this._luaLogBuf ||= []).push({ t: Date.now(), script: scriptName, text: String(text), isError: !!isError });
+      if (this._luaLogBuf.length > 200) this._luaLogBuf.shift();
+    } catch {}
     if (this.settings.get("lua.debugLog") || isError) {
       try { console.log(`[lua:${scriptName}]`, text); } catch {}
     }
@@ -132,9 +136,10 @@ export class App {
 
   toast(text) {
     const el = document.createElement("div");
-    el.style.cssText = "position:fixed;bottom:20px;right:20px;background:rgba(13,17,23,0.95);color:#e6edf3;padding:10px 16px;border-radius:10px;border:1px solid rgba(74,222,128,0.4);font:600 13px system-ui;z-index:1;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:opacity 0.3s;";
+    el.style.cssText = "position:fixed;bottom:20px;right:20px;background:rgba(13,17,23,0.95);color:#e6edf3;padding:10px 16px;border-radius:10px;border:1px solid rgba(74,222,128,0.4);font:600 13px system-ui;z-index:2147483646;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:opacity 0.3s;";
     el.textContent = String(text);
-    this.hud.shadow.container.appendChild(el);
+    const host = this.hud?.shadow?.container || document.documentElement;
+    try { host.appendChild(el); } catch { return; }
     setTimeout(() => { el.style.opacity = "0"; }, 2400);
     setTimeout(() => el.remove(), 2800);
   }
@@ -430,8 +435,8 @@ export class App {
   }
 
   _checkAnalysisStall() {
-    if (!this.settings.get("auto.enabled") || !this.currentFen) return;
-    if (!this.isOurTurn() || this.autoMove._busy) return;
+    if (!this.currentFen) return;
+    if (this.autoMove._busy) return;
 
     if (!this._engineAnswering) return;
     const since = this._analyzeStartedAt ? Date.now() - this._analyzeStartedAt : 0;
@@ -716,7 +721,7 @@ export class App {
     const top = moves[0];
     if (top && top.move !== this._lastAnnounced && this.isOurTurn()) {
       this._lastAnnounced = top.move;
-      this.notifyBestMove(top.move);
+      this._scheduleBestMoveAnnounce(top.move);
     }
     if (top && this.isOurTurn() && !this.autoMove._busy && !this.handBrain.blocksAuto) {
       this.autoMove.consider({
@@ -1126,7 +1131,8 @@ export class App {
     }
     const c = this.boardCandidate;
 
-    if (!c.strategies.apiMove && !this._trustPatchActive() && !this._warnedTrust) {
+    const inputPrimary = !c.strategies.apiMove || (!!c.strategies.inputFirst && !!c.strategies.playingAs?.());
+    if (inputPrimary && !this._trustPatchActive() && !this._warnedTrust) {
       this._warnedTrust = true;
       this.log("auto-move needs the input trust patch on this site - reload the page after enabling auto move");
       this.toast?.("Reload the page to enable auto-move on this site");
@@ -1134,6 +1140,17 @@ export class App {
     const san = this.uciToSan(uci);
     const fenBefore = this.detector.extractFEN(c) || this.currentFen;
     const promotion = uci.length > 4 ? uci[4].toLowerCase() : null;
+    const inputFirst = !!c.strategies.inputFirst && !!c.strategies.playingAs?.();
+
+    if (c.strategies.apiMove && !inputFirst) {
+      try {
+        if (c.strategies.apiMove(uci) && (await this._waitForFenChange(c, fenBefore, 1200))) {
+          await this._verifySiteAck(c, san, uci);
+          this.events.emit("move", { move: uci, san });
+          return true;
+        }
+      } catch {}
+    }
 
     let dispatched = false;
     try {
@@ -1156,6 +1173,7 @@ export class App {
     }
 
     if (dispatched && (await this._waitForFenChange(c, fenBefore, promotion ? 3500 : 1600))) {
+      await this._verifySiteAck(c, san, uci);
       this.events.emit("move", { move: uci, san });
       return true;
     }
@@ -1163,6 +1181,7 @@ export class App {
     if (c.strategies.apiMove && c.strategies.apiMove(uci)) {
       if (await this._waitForFenChange(c, fenBefore, 800)) {
         this.log("input move did not register, used board api for", uci);
+        await this._verifySiteAck(c, san, uci);
         this.events.emit("move", { move: uci, san });
         return true;
       }
@@ -1236,7 +1255,29 @@ export class App {
     };
     const evt = type.startsWith("pointer") ? new PointerEvent(type, opts) : new MouseEvent(type, opts);
     el.dispatchEvent(this.tagEvent(evt));
+    if (type === "pointerup" || type === "pointercancel") {
+      const pid = opts.pointerId ?? 1;
+      let n = el;
+      let hops = 0;
+      while (n && hops++ < 6) {
+        try { if (n.hasPointerCapture?.(pid)) n.releasePointerCapture(pid); } catch {}
+        n = n.parentElement;
+      }
+    }
     return true;
+  }
+
+  async _verifySiteAck(candidate, san, uci) {
+    if (!candidate.strategies.siteAck) return true;
+    const started = Date.now();
+    while (Date.now() - started < 2500) {
+      let ok = false;
+      try { ok = candidate.strategies.siteAck(san); } catch {}
+      if (ok) return true;
+      await this._sleep(120);
+    }
+    this.log("warning: site never acknowledged", uci, "- it may not have registered with the server");
+    return false;
   }
 
   _waitForFenChange(candidate, fenBefore, timeoutMs = 1600) {
@@ -1491,6 +1532,22 @@ export class App {
       this.overlay.clearHandBrainMarks?.();
       for (const sq of squares || []) this.overlay.addHandBrainMark?.(sq);
     };
+  }
+
+  _scheduleBestMoveAnnounce(uci) {
+    clearTimeout(this._hbTimer);
+    const delay = Math.max(0, Number(this.settings.get("handbrain.announceDelayMs")) || 0);
+    const fen = this.currentFen;
+    if (delay === 0 || !this.handBrain.enabled) {
+      this.notifyBestMove(uci);
+      return;
+    }
+    this._hbTimer = setTimeout(() => {
+      if (fen !== this.currentFen) return;
+      if (this._lastAnnounced !== uci) return;
+      if (!this.isOurTurn()) return;
+      this.notifyBestMove(uci);
+    }, delay);
   }
 
   notifyBestMove(uci) {

@@ -79,7 +79,16 @@ export class ScriptManager {
     await vm.init();
     const api = new LuaAPI(this.app, s.name);
     const globals = api.build();
-    for (const [k, v] of Object.entries(globals)) vm.setGlobalTable("__raw_" + k, v);
+    const nullSafe = (table) => {
+      const out = {};
+      for (const [key, v] of Object.entries(table)) {
+        out[key] = typeof v === "function"
+          ? (...a) => { const r = v(...a); return r === null ? undefined : r; }
+          : v;
+      }
+      return out;
+    };
+    for (const [k, v] of Object.entries(globals)) vm.setGlobalTable("__raw_" + k, nullSafe(v));
 
     // fengari does not convert a Lua function into a callable JS value: it
     // arrives as nil, so every callback-taking API silently did nothing. The
@@ -164,7 +173,10 @@ function buildCallbackBridge(globals) {
     '    local n = select("#", ...)',
     "    local a = {...}",
     "    for i = 1, n do",
-    '      if type(a[i]) == "function" then a[i] = createproxy(a[i], "function") end',
+    '      if type(a[i]) == "function" then',
+    "        local uf = a[i]",
+    '        a[i] = createproxy(function(_, ...) return uf(...) end, "function")',
+    "      end",
     "    end",
     "    return f(nil, unpack(a, 1, n))",
     "  end",

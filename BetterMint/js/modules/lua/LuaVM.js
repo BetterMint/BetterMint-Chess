@@ -101,18 +101,30 @@ export class LuaVM {
     return v;
   }
 
+  _stackError() {
+    const { lua, lauxlib, to_jsstring } = window.fengari;
+    const L = this.L;
+    let err = "unknown Lua error";
+    try {
+      const raw = lauxlib.luaL_tolstring ? lauxlib.luaL_tolstring(L, -1) : lua.lua_tostring(L, -1);
+      if (raw) err = to_jsstring(raw);
+      if (lauxlib.luaL_tolstring) lua.lua_pop(L, 1);
+    } catch {}
+    return err;
+  }
+
   run(code, chunkName = "script") {
-    const { lua, lauxlib, to_luastring, to_jsstring } = window.fengari;
+    const { lua, lauxlib, to_luastring } = window.fengari;
     const L = this.L;
     const status = lauxlib.luaL_loadbuffer(L, to_luastring(code), code.length, to_luastring(chunkName));
     if (status !== lua.LUA_OK) {
-      const err = to_jsstring(lua.lua_tostring(L, -1));
+      const err = this._stackError();
       lua.lua_pop(L, 1);
       return { ok: false, error: err };
     }
     const callStatus = lua.lua_pcall(L, 0, 1, 0);
     if (callStatus !== lua.LUA_OK) {
-      const err = to_jsstring(lua.lua_tostring(L, -1));
+      const err = this._stackError();
       lua.lua_pop(L, 1);
       return { ok: false, error: err };
     }
@@ -132,7 +144,7 @@ export class LuaVM {
     for (const a of args) this.push(a);
     const status = lua.lua_pcall(L, args.length, 1, 0);
     if (status !== lua.LUA_OK) {
-      const err = to_jsstring(lua.lua_tostring(L, -1));
+      const err = this._stackError();
       lua.lua_pop(L, 1);
       return { ok: false, error: err };
     }

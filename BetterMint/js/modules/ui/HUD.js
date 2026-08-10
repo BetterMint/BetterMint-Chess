@@ -166,6 +166,7 @@ const HUD_CSS = `
 .abtn.active{background:linear-gradient(135deg,#5d3fd3,#4a30a8);border-color:#7a5cff;color:#fff;box-shadow:0 3px 12px rgba(93,63,211,0.4)}
 .abtn.active:hover{box-shadow:0 5px 16px rgba(93,63,211,0.52)}
 .hb{position:fixed;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:11px 24px;background:#1e1e2d;border:1px solid rgba(122,92,255,0.5);border-radius:14px;color:#fff;box-shadow:0 8px 30px rgba(93,63,211,0.4);z-index:1}
+.hb.bottom{top:auto;bottom:14px}
 .hb-label{font-size:11px;letter-spacing:2px;color:#8a8a9e;font-weight:700}
 .hb-piece{font-size:34px;line-height:1;color:#b9a8ff;text-shadow:0 0 20px rgba(122,92,255,0.8)}
 .hb-name{font-size:16px;font-weight:800;letter-spacing:1px;background:linear-gradient(90deg,#7a5cff,#b9a8ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
@@ -577,15 +578,22 @@ export class HUD {
     this.root.classList.remove("pos-right", "pos-left");
     if (pos === "float") {
       if (!this._position) {
-        const sx = Number(this.settings.get("ui.hudFloatX"));
-        const sy = Number(this.settings.get("ui.hudFloatY"));
-        if (Number.isFinite(sx) && Number.isFinite(sy)) this._position = { x: sx, y: sy };
+        const rx = this.settings.get("ui.hudFloatX");
+        const ry = this.settings.get("ui.hudFloatY");
+        if (typeof rx === "number" && Number.isFinite(rx) && typeof ry === "number" && Number.isFinite(ry)) {
+          this._position = { x: rx, y: ry };
+        }
       }
       if (this._position) {
         this._position = this._clampToBounds(this._position);
         this.root.style.left = this._position.x + "px";
         this.root.style.top = this._position.y + "px";
         this.root.style.right = "auto";
+      } else {
+        this.root.classList.add("pos-right");
+        this.root.style.left = "";
+        this.root.style.top = "";
+        this.root.style.right = "";
       }
     } else {
       this.root.classList.add("pos-" + (pos === "left" ? "left" : "right"));
@@ -616,6 +624,9 @@ export class HUD {
     this._refs.grip.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       const r = this.root.getBoundingClientRect();
+      this.root.style.left = r.left + "px";
+      this.root.style.top = r.top + "px";
+      this.root.style.right = "auto";
       this.root.classList.remove("pos-right", "pos-left");
       this._drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
       const move = (ev) => {
@@ -635,6 +646,7 @@ export class HUD {
         if (this._position) {
           this.settings.set("ui.hudFloatX", Math.round(this._position.x));
           this.settings.set("ui.hudFloatY", Math.round(this._position.y));
+          if (this.settings.get("ui.hudPosition") !== "float") this.settings.set("ui.hudPosition", "float");
         }
       };
       window.addEventListener("pointermove", move);
@@ -655,6 +667,7 @@ export class HUD {
       this.root.style.right = "auto";
       this.settings.set("ui.hudFloatX", Math.round(this._position.x));
       this.settings.set("ui.hudFloatY", Math.round(this._position.y));
+      if (this.settings.get("ui.hudPosition") !== "float") this.settings.set("ui.hudPosition", "float");
     });
   }
 
@@ -957,15 +970,22 @@ ${compact ? ".hud{width:250px;font-size:12px}.evalnum{font-size:19px}" : ""}
   showHandBrain(piece, glyph, meta = {}) {
     this.hideHandBrain();
     const el = document.createElement("div");
-    el.className = "hb pop";
+    const animate = this.settings.get("handbrain.animate") !== false;
+    const bottom = this.settings.get("handbrain.bannerPosition") === "bottom";
+    el.className = "hb" + (animate ? " pop" : "") + (bottom ? " bottom" : "");
     el.dataset.r = "hb";
     const count = Number(meta.count) || 0;
     const hint = count > 1 ? `<span class="hb-count">${count} available</span>` : "";
-    el.innerHTML = `<span class="hb-label">MOVE THE</span><span class="hb-piece">${glyph}</span><span class="hb-name">${this._esc(piece).toUpperCase()}</span>${hint}`;
+    const label = String(this.settings.get("handbrain.customLabel") || "MOVE THE");
+    el.innerHTML = `<span class="hb-label">${this._esc(label)}</span><span class="hb-piece">${glyph}</span><span class="hb-name">${this._esc(piece).toUpperCase()}</span>${hint}`;
     this.shadow.container.appendChild(el);
+    clearTimeout(this._hbHideTimer);
+    const dur = Math.max(0, Number(this.settings.get("handbrain.bannerDurationMs")) || 0);
+    if (dur > 0) this._hbHideTimer = setTimeout(() => this.hideHandBrain(), dur);
   }
 
   hideHandBrain() {
+    clearTimeout(this._hbHideTimer);
     this.shadow.container.querySelector(".hb")?.remove();
   }
 

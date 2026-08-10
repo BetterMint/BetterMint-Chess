@@ -68,7 +68,7 @@ h1, h2, h3, .page-title, .app-header h1 { font-family: var(--font-display); }
 
 /* ============ APP LAYOUT ============ */
 .app-container {
-  max-width: 1060px;
+  max-width: 1280px;
   margin: 24px auto;
   background: var(--bg-card);
   border-radius: var(--radius);
@@ -107,57 +107,113 @@ h1, h2, h3, .page-title, .app-header h1 { font-family: var(--font-display); }
 
 .settings-container { display: flex; flex: 1; overflow: hidden; }
 .settings-tabs {
-  width: 202px;
+  width: 264px;
   background: rgba(0,0,0,0.16);
   border-right: 1px solid var(--border);
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 10px 10px;
+  padding: 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .settings-tabs::-webkit-scrollbar { width: 6px; }
 .settings-tabs::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
 
+.tab-section {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding: 14px 10px 6px;
+  user-select: none;
+}
+.tab-section:first-child { padding-top: 2px; }
+
+@keyframes navIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 9px 12px;
   background: none;
   border: none;
-  border-radius: 9px;
+  border-radius: 10px;
   color: var(--text-muted);
-  font-size: 13.5px;
-  font-weight: 550;
-  letter-spacing: 0.1px;
   text-align: left;
   cursor: pointer;
   position: relative;
-  transition: background 0.15s ease, color 0.15s ease;
+  animation: navIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
-.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.055); }
-.tab-btn:hover .ico { opacity: 1; }
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); transform: translateX(3px); }
+.tab-btn:hover .ico { opacity: 1; transform: scale(1.12); }
+.tab-btn .tab-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tab-btn .tab-label { font-size: 14.5px; font-weight: 600; letter-spacing: 0.1px; }
+.tab-btn .tab-desc {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.62;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.16s ease;
+}
+.tab-btn:hover .tab-desc { opacity: 0.85; }
 .tab-btn.active {
   color: #fff;
-  font-weight: 650;
   background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 90%, #000), var(--primary-dark));
-  box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--primary) 70%, transparent);
+  box-shadow: 0 3px 14px -3px color-mix(in srgb, var(--primary) 70%, transparent);
+  transform: translateX(3px);
+}
+.tab-btn.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
 }
 body.no-glow .tab-btn.active { box-shadow: none; }
+body.no-glow .tab-btn.active::before { box-shadow: none; }
+.tab-btn.active .tab-desc { opacity: 0.85; }
 .tab-btn.active .ico { opacity: 1; }
 .tab-btn .ico {
-  font-size: 14px;
-  width: 18px;
+  font-size: 17px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   opacity: 0.65;
   flex-shrink: 0;
-  transition: opacity 0.15s ease;
+  background: rgba(255,255,255,0.05);
+  border-radius: 7px;
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
 }
+.tab-btn.active .ico { background: rgba(255,255,255,0.14); }
 
-.settings-content { flex: 1; padding: 22px 26px; overflow-y: auto; scrollbar-gutter: stable; }
+/* themed scrollbars everywhere on the options page */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--primary) 85%, transparent); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+.settings-content { flex: 1; padding: 24px 30px; overflow-y: auto; scrollbar-gutter: stable; }
 .settings-content::-webkit-scrollbar { width: 8px; }
 .settings-content::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 4px; }
 .settings-content::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }

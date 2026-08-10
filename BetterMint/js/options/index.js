@@ -3,13 +3,23 @@ import { FeatureDocs } from "../modules/docs/FeatureDocs.js";
 import { LuaApiDocs, LuaExampleScript } from "../modules/docs/LuaDocs.js";
 import { LuaExamples } from "../modules/docs/LuaExamples.js";
 import { helpFor } from "../modules/docs/SettingsHelp.js";
-import { listBooks, putBook, deleteBook, setBookStage } from "../modules/books/BookStore.js";
+import { listBooks, putBook, deleteBook, setBookStage, getBook, bufferToBase64, base64ToBuffer } from "../modules/books/BookStore.js";
 import { socketCatalog, parseSocketList, stringifySocketList, SOCKET_BASES, SOCKET_DOCS, socketUrl } from "../modules/engine/SocketCatalog.js";
 import { HUD_THEMES, resolveTheme } from "../modules/ui/HUD.js";
-import { Humanizer } from "../modules/engine/Humanizer.js";
+import { Humanizer, SkillPresets } from "../modules/engine/Humanizer.js";
+import { BlockEditor } from "../modules/lua/BlockEditor.js";
+import { compileWorkspace, emptyWorkspace } from "../modules/lua/BlockCompiler.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+const HUM_PRESET_KEYS = {
+  "hum.blunderChance": "blunderChance",
+  "hum.rank2Chance": "rank2Chance",
+  "hum.rank3Chance": "rank3Chance",
+  "hum.meanMs": "meanMs",
+  "hum.stdMs": "stdMs",
+};
 
 const store = {
   async getAll() {
@@ -67,13 +77,17 @@ function siteOf(item) {
 }
 
 const NAV = [
-  { id: "dashboard", label: "Dashboard", ico: "◉" },
-  { id: "settings", label: "Settings", ico: "⚙" },
-  { id: "engines", label: "Engines", ico: "⚡" },
-  { id: "sockets", label: "Sockets", ico: "◎" },
-  { id: "books", label: "Books & TB", ico: "▤" },
-  { id: "lua", label: "Lua Scripting", ico: "⌘" },
-  { id: "docs", label: "Docs", ico: "?" },
+  { section: "Overview" },
+  { id: "dashboard", label: "Dashboard", ico: "◉", desc: "Everything at a glance" },
+  { section: "Configure" },
+  { id: "settings", label: "Settings", ico: "⚙", desc: "Every parameter" },
+  { id: "engines", label: "Engines", ico: "⚡", desc: "Multi-engine control" },
+  { id: "sockets", label: "Sockets", ico: "◎", desc: "Remote engine links" },
+  { section: "Library" },
+  { id: "books", label: "Books & TB", ico: "▤", desc: "Opening books & tablebases" },
+  { id: "lua", label: "Lua Scripting", ico: "⌘", desc: "Scripts & block builder" },
+  { section: "Help" },
+  { id: "docs", label: "Docs", ico: "?", desc: "Guides & reference" },
 ];
 
 function toast(text, err = false) {
@@ -198,7 +212,7 @@ class OptionsApp {
         <div class="settings-content" id="main"></div>
       </div>
       <footer class="app-footer">
-        <span class="version">v3.0.0 · undetectable by design</span>
+        <span class="version">v${chrome.runtime.getManifest().version} · undetectable by design</span>
         <div class="btn-group">
           <button class="btn secondary sm" id="foot-export">Export</button>
           <button class="btn secondary sm" id="foot-import">Import</button>
@@ -208,10 +222,20 @@ class OptionsApp {
     document.body.appendChild(app);
 
     const tabs = $(".settings-tabs", app);
+    let navIdx = 0;
     for (const n of NAV) {
+      if (n.section) {
+        const h = document.createElement("div");
+        h.className = "tab-section";
+        h.textContent = n.section;
+        tabs.appendChild(h);
+        continue;
+      }
       const btn = document.createElement("button");
       btn.className = "tab-btn" + (this.page === n.id ? " active" : "");
-      btn.innerHTML = `<span class="ico">${n.ico}</span>${n.label}`;
+      btn.dataset.page = n.id;
+      btn.style.animationDelay = `${navIdx++ * 28}ms`;
+      btn.innerHTML = `<span class="ico">${n.ico}</span><span class="tab-text"><span class="tab-label">${n.label}</span><span class="tab-desc">${n.desc || ""}</span></span>`;
       btn.onclick = () => (location.hash = n.id);
       tabs.appendChild(btn);
     }
@@ -226,23 +250,36 @@ class OptionsApp {
       this.navigate(this.page);
     };
     $("#foot-export").onclick = async () => {
-      const luaScripts = await new Promise((res) => chrome.storage.local.get("luaScripts", (r) => res(r.luaScripts || [])));
+      const syncAll = await new Promise((res) => chrome.storage.sync.get(null, res));
+      const localAll = await new Promise((res) => chrome.storage.local.get(["luaScripts", "uciOptions"], res));
+      const luaScripts = localAll.luaScripts || [];
+      const uciOptions = localAll.uciOptions || {};
+      const books = [];
+      try {
+        for (const meta of await listBooks()) {
+          const full = await getBook(meta.name);
+          if (full?.buffer) books.push({ name: full.name, stage: full.stage || "opening", base64: bufferToBase64(full.buffer) });
+        }
+      } catch {}
       const exportData = {
         _meta: {
           app: "BetterMint",
-          version: 2,
+          version: 3,
           exportedAt: new Date().toISOString(),
-          description: "Full config export — settings, colors, customizations, and Lua scripts",
+          description: "Full config export — settings (incl. custom colors), Lua scripts, UCI options and opening books",
         },
-        settings: this.settings,
+        settings: { ...getAllDefaults(), ...syncAll },
         luaScripts,
+        uciOptions,
+        books,
       };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = `bettermint-config-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
-      toast("Config exported (settings + Lua scripts)");
+      URL.revokeObjectURL(a.href);
+      toast(`Config exported (settings + ${luaScripts.length} scripts + ${books.length} books)`);
     };
     $("#foot-import").onclick = () => {
       const inp = document.createElement("input");
@@ -252,13 +289,23 @@ class OptionsApp {
         try {
           const raw = JSON.parse(await inp.files[0].text());
           const settingsObj = raw.settings || raw;
-          const luaScripts = raw.luaScripts;
           for (const [k, v] of Object.entries(settingsObj)) {
             if (k === "_meta") continue;
             await store.set(k, v);
           }
-          if (Array.isArray(luaScripts)) {
-            await new Promise((res) => chrome.storage.local.set({ luaScripts }, res));
+          if (Array.isArray(raw.luaScripts)) {
+            await new Promise((res) => chrome.storage.local.set({ luaScripts: raw.luaScripts }, res));
+            this.scripts = raw.luaScripts;
+          }
+          if (raw.uciOptions && typeof raw.uciOptions === "object") {
+            await new Promise((res) => chrome.storage.local.set({ uciOptions: raw.uciOptions }, res));
+          }
+          if (Array.isArray(raw.books)) {
+            for (const b of raw.books) {
+              if (b?.name && b?.base64) {
+                try { await putBook(b.name, base64ToBuffer(b.base64), b.stage || "opening"); } catch {}
+              }
+            }
           }
           this.settings = await store.getAll();
           toast("Config imported");
@@ -404,7 +451,7 @@ class OptionsApp {
 
   async navigate(page) {
     this.page = page;
-    $$(".tab-btn").forEach((b, i) => b.classList.toggle("active", NAV[i]?.id === page));
+    $$(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
     const main = $("#main");
     main.innerHTML = "";
     main.scrollTop = 0;
@@ -631,6 +678,7 @@ class OptionsApp {
       const v = item.float ? parseFloat(range.value) : parseInt(range.value, 10);
       this.settings[item.key] = v;
       await store.set(item.key, v);
+      await this._maybeBreakPreset(item.key);
     };
     range.addEventListener("input", sync);
     range.addEventListener("change", commit);
@@ -674,6 +722,7 @@ class OptionsApp {
     sel.onchange = async () => {
       this.settings[item.key] = sel.value;
       await store.set(item.key, sel.value);
+      if (item.key === "hum.preset") await this._applyPresetToSliders(sel.value);
     };
     this._binders.push({
       key: item.key,
@@ -682,6 +731,31 @@ class OptionsApp {
     ctrl.appendChild(sel);
     row.appendChild(ctrl);
     return row;
+  }
+
+  async _applyPresetToSliders(name) {
+    const preset = SkillPresets[name];
+    if (!preset) return;
+    const write = {};
+    for (const [key, prop] of Object.entries(HUM_PRESET_KEYS)) {
+      write[key] = preset[prop];
+      this.settings[key] = preset[prop];
+    }
+    await store.setMany(write);
+    toast(`${name[0].toUpperCase() + name.slice(1)} preset applied to sliders`);
+  }
+
+  async _maybeBreakPreset(changedKey) {
+    if (!HUM_PRESET_KEYS[changedKey]) return;
+    const preset = SkillPresets[this.settings["hum.preset"]];
+    if (!preset) return;
+    const matches = Object.entries(HUM_PRESET_KEYS).every(
+      ([key, prop]) => Number(this.settings[key]) === Number(preset[prop]),
+    );
+    if (matches) return;
+    this.settings["hum.preset"] = "custom";
+    await store.set("hum.preset", "custom");
+    toast("Preset switched to Custom");
   }
 
   _colorRow(item) {
@@ -1200,7 +1274,7 @@ class OptionsApp {
     main.innerHTML = `<div class="page-title">Lua Scripting</div><div class="page-sub">Full Lua 5.3 runtime — build your own features</div>`;
     const tabs = document.createElement("div");
     tabs.className = "subtabs";
-    for (const [id, label] of [["scripts", "Scripts"], ["examples", "Examples"], ["apidocs", "API Docs"]]) {
+    for (const [id, label] of [["scripts", "Scripts"], ["blocks", "Blocks"], ["examples", "Examples"], ["apidocs", "API Docs"]]) {
       const t = document.createElement("button");
       t.className = "subtab" + (this.luaTab === id ? " active" : "");
       t.textContent = label;
@@ -1211,7 +1285,99 @@ class OptionsApp {
 
     if (this.luaTab === "apidocs") return this._luaApiDocs(main);
     if (this.luaTab === "examples") return this._luaExamples(main);
+    if (this.luaTab === "blocks") return this._pageBlocks(main);
     return this._luaScripts(main);
+  }
+
+  _pageBlocks(main) {
+    const blocksScripts = this.scripts.filter((s) => s.kind === "blocks");
+    let s = blocksScripts.find((x) => x.id === this.activeBlockScript) || blocksScripts[0];
+
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;gap:9px;margin-bottom:12px;align-items:center;flex-wrap:wrap";
+
+    const picker = document.createElement("select");
+    picker.className = "txt";
+    picker.style.maxWidth = "200px";
+    for (const bs of blocksScripts) {
+      const o = document.createElement("option");
+      o.value = bs.id;
+      o.textContent = bs.name;
+      picker.appendChild(o);
+    }
+    if (s) picker.value = s.id;
+    picker.onchange = () => { this.activeBlockScript = picker.value; this._pageBlocks(main); };
+
+    const newBtn = document.createElement("button");
+    newBtn.className = "btn sm";
+    newBtn.textContent = "+ New blocks script";
+    newBtn.onclick = async () => {
+      const name = prompt("Script name:", "my-blocks");
+      if (!name) return;
+      const ns = { id: "lua-" + Date.now().toString(36), name, kind: "blocks", blocks: emptyWorkspace(), code: "", enabled: false, createdAt: Date.now(), updatedAt: Date.now() };
+      await this._saveScript(ns);
+      this.activeBlockScript = ns.id;
+      this._pageBlocks(main);
+    };
+    bar.append(picker, newBtn);
+
+    if (s) {
+      this.activeBlockScript = s.id;
+      const nameInput = document.createElement("input");
+      nameInput.className = "txt";
+      nameInput.value = s.name;
+      nameInput.style.maxWidth = "160px";
+      nameInput.onchange = async () => { s.name = nameInput.value; await this._saveScript(s); };
+      const runBtn = document.createElement("button");
+      runBtn.className = "btn sm " + (s.enabled ? "danger" : "success");
+      runBtn.textContent = s.enabled ? "Disable" : "Enable";
+      runBtn.onclick = async () => {
+        s.enabled = !s.enabled;
+        await this._saveScript(s);
+        toast(s.enabled ? "Script will run on chess pages" : "Script disabled");
+        this._pageBlocks(main);
+      };
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn sm danger";
+      delBtn.textContent = "Delete";
+      delBtn.onclick = async () => {
+        if (!confirm("Delete " + s.name + "?")) return;
+        this.scripts = this.scripts.filter((x) => x.id !== s.id);
+        await new Promise((res) => chrome.storage.local.set({ luaScripts: this.scripts }, res));
+        this.activeBlockScript = this.scripts.find((x) => x.kind === "blocks")?.id || null;
+        this._pageBlocks(main);
+      };
+      bar.append(nameInput, runBtn, delBtn);
+    }
+    main.appendChild(bar);
+
+    const editorHost = document.createElement("div");
+    main.appendChild(editorHost);
+
+    if (!s) {
+      editorHost.innerHTML = `<div class="empty" style="padding:40px;text-align:center;color:var(--text-muted)">Create a blocks script to get started — no code needed, just snap blocks together.</div>`;
+      return;
+    }
+
+    this._blockEditor?.destroy?.();
+    let saveTimer = null;
+    const editor = new BlockEditor(editorHost, {
+      workspace: s.blocks && s.blocks.blocks ? s.blocks : emptyWorkspace(),
+      onChange: (ws) => {
+        const code = compileWorkspace(ws);
+        editor.setCode(code);
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          s.blocks = ws;
+          s.code = code;
+          s.updatedAt = Date.now();
+          await this._saveScript(s);
+        }, 500);
+      },
+    });
+    this._blockEditor = editor;
+    editor.mount();
+    editor.setCode(compileWorkspace(editor.ws));
   }
 
   _luaExamples(main) {
@@ -1308,7 +1474,8 @@ class OptionsApp {
     for (const s of this.scripts) {
       const item = document.createElement("div");
       item.className = "script-item" + (this.activeScript === s.id ? " active" : "");
-      item.innerHTML = `<span class="dot${s.enabled ? " run" : ""}"></span><span class="nm">${this._esc(s.name)}</span>`;
+      const badge = s.kind === "blocks" ? `<span class="tag" style="margin-left:6px;font-size:9px">🧩</span>` : "";
+      item.innerHTML = `<span class="dot${s.enabled ? " run" : ""}"></span><span class="nm">${this._esc(s.name)}</span>${badge}`;
       item.onclick = () => { this.activeScript = s.id; this._pageLua(main); };
       list.appendChild(item);
     }
@@ -1360,11 +1527,47 @@ class OptionsApp {
       bar.append(nameInput, runBtn, saveBtn, delBtn);
       right.appendChild(bar);
 
-      right.appendChild(this._buildEditor(s.code));
-      const hint = document.createElement("div");
-      hint.style.cssText = "color:var(--text-muted);font-size:11.5px;margin-top:9px";
-      hint.textContent = "Ctrl+S saves. Enabled scripts auto-run on every chess page.";
-      right.appendChild(hint);
+      if (s.kind === "blocks") {
+        saveBtn.style.display = "none";
+        const note = document.createElement("div");
+        note.className = "section";
+        note.innerHTML = `<div class="section-title">🧩 Blocks script</div>
+          <div style="color:var(--text-muted);font-size:12.5px;line-height:1.7">This script is built with the visual blocks editor. The generated Lua below is read-only — editing it here would be overwritten the next time the blocks are saved.</div>`;
+        const row = document.createElement("div");
+        row.className = "btn-group";
+        row.style.marginTop = "10px";
+        const openBtn = document.createElement("button");
+        openBtn.className = "btn sm";
+        openBtn.textContent = "Open in Blocks editor";
+        openBtn.onclick = () => {
+          this.activeBlockScript = s.id;
+          this.luaTab = "blocks";
+          this._pageLua(main);
+        };
+        const convertBtn = document.createElement("button");
+        convertBtn.className = "btn secondary sm";
+        convertBtn.textContent = "Convert to code";
+        convertBtn.onclick = async () => {
+          if (!confirm("Convert to a plain Lua script? The blocks layout is kept in case you convert back by hand, but future edits happen in code.")) return;
+          s.kind = "code";
+          await this._saveScript(s);
+          this._pageLua(main);
+        };
+        row.append(openBtn, convertBtn);
+        note.appendChild(row);
+        right.appendChild(note);
+        const pre = document.createElement("pre");
+        pre.className = "example-code";
+        pre.style.marginTop = "10px";
+        pre.textContent = s.code || "-- (no blocks yet)";
+        right.appendChild(pre);
+      } else {
+        right.appendChild(this._buildEditor(s.code));
+        const hint = document.createElement("div");
+        hint.style.cssText = "color:var(--text-muted);font-size:11.5px;margin-top:9px";
+        hint.textContent = "Ctrl+S saves. Enabled scripts auto-run on every chess page.";
+        right.appendChild(hint);
+      }
     }
     layout.appendChild(right);
     main.appendChild(layout);

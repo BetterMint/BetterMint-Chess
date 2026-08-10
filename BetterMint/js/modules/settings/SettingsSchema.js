@@ -244,7 +244,14 @@ export const SettingsSchema = [
     category: "handbrain", label: "Hand & Brain",
     items: [
       { key: "handbrain.enabled", label: "Hand & Brain mode", type: "bool", def: false, desc: "Only tells you WHICH piece to move, never where. Trains piece intuition while staying discreet." },
+      { key: "handbrain.announceDelayMs", label: "Announce after engines settle (ms)", type: "range", def: 800, min: 0, max: 3000, step: 100, desc: "Waits for the top move to stay unchanged this long before naming the piece, so the banner does not flap while engines are still thinking. 0 = announce immediately" },
       { key: "handbrain.showBanner", label: "Show piece banner", type: "bool", def: true },
+      { key: "handbrain.animate", label: "Banner pop animation", type: "bool", def: true },
+      { key: "handbrain.bannerPosition", label: "Banner position", type: "select", def: "top", options: [
+        { v: "top", l: "Top of screen" }, { v: "bottom", l: "Bottom of screen" },
+      ]},
+      { key: "handbrain.customLabel", label: "Banner label text", type: "text", def: "MOVE THE", desc: "Words before the piece name, e.g. 'PLAY THE'" },
+      { key: "handbrain.bannerDurationMs", label: "Banner auto-hide (ms, 0 = never)", type: "range", def: 0, min: 0, max: 15000, step: 250 },
       { key: "handbrain.tts", label: "Speak piece name (TTS)", type: "bool", def: true },
       { key: "handbrain.ttsVolume", label: "TTS volume", type: "range", def: 0.8, min: 0, max: 1, step: 0.05, float: true },
       { key: "handbrain.ttsRate", label: "TTS speed", type: "range", def: 1.1, min: 0.5, max: 2, step: 0.1, float: true },

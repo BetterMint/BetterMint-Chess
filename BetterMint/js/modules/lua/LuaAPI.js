@@ -42,10 +42,17 @@ export class LuaAPI {
     const app = this.app;
     const api = {
       bm: {
-        version: "3.0.0",
+        version: chrome.runtime?.getManifest?.()?.version || "3.0.0",
         site: app.hostKind,
         log: (...a) => app.luaLog(this.scriptName, a.map(String).join(" ")),
         notify: (text) => app.toast(String(text)),
+        speak: (text) => {
+          try {
+            const u = new SpeechSynthesisUtterance(String(text));
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(u);
+          } catch {}
+        },
         set_timeout: (fn, ms) => this._timeout(fn, ms),
         set_interval: (fn, ms) => this._interval(fn, ms),
         clear: (id) => this._clearTimer(id),

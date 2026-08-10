@@ -36,9 +36,14 @@ export class SiteDetector {
   }
 
   start() {
+    this._stopped = false;
     this._scan("initial");
-    this._hookNavigation();
+    if (!this._navHooked) {
+      this._navHooked = true;
+      this._hookNavigation();
+    }
     this._scheduleRescan();
+    clearInterval(this._scanInterval);
     this._scanInterval = setInterval(() => {
       if (location.href !== this._lastUrl) {
         this._lastUrl = location.href;
@@ -79,7 +84,10 @@ export class SiteDetector {
 
   _scan(reason) {
     const candidates = this.allCandidates();
-    const board = candidates[0] || null;
+    let board = candidates[0] || null;
+    if (board && this._hostKind() === "generic") {
+      board = candidates.find((c) => this._hasChessEvidence(c)) || null;
+    }
     const prev = this.result;
     this._failStreak = board ? 0 : Math.min((this._failStreak || 0) + 1, 5);
 
@@ -111,6 +119,34 @@ export class SiteDetector {
       this.result = { host: this._hostKind(), board, detectedAt: Date.now(), reason: `${reason}-upgrade` };
       this._emit("board", this.result);
     }
+  }
+
+  _hasChessEvidence(c) {
+    if (c.strategies?.apiFen) {
+      try {
+        const fen = c.strategies.apiFen();
+        if (fen && FEN_RX.test(fen)) return true;
+      } catch {}
+    }
+    if (c.strategies?.pieceLayer) {
+      try {
+        if (this._plausibleBoard(c.strategies.pieceLayer())) return true;
+      } catch {}
+    }
+    try { if (this._fenFromDom()) return true; } catch {}
+    return false;
+  }
+
+  _plausibleBoard(b) {
+    if (!Array.isArray(b) || b.length !== 64) return false;
+    let wk = 0, bk = 0, n = 0;
+    for (const p of b) {
+      if (!p) continue;
+      n++;
+      if (p === "K") wk++;
+      else if (p === "k") bk++;
+    }
+    return wk === 1 && bk === 1 && n >= 2 && n <= 64;
   }
 
   _hostKind() {
@@ -194,6 +230,31 @@ export class SiteDetector {
                 const v = el.game.getTurn();
                 return v === 2 ? "b" : v === 1 ? "w" : null;
               } catch { return null; }
+            };
+          }
+          if (this._hostKind() === "chesscom") {
+            // el.game.move() applies the move to chess.com's local game object
+            // but never submits it through their live pipeline - the server,
+            // opponent and move list never see it. In live games (playingAs
+            // known) the synthetic input path is the only real move channel.
+            c.strategies.inputFirst = true;
+            c.strategies.siteAck = (san) => {
+              try {
+                const norm = (s) => String(s || "").replace(/[+#!?]/g, "").trim();
+                const target = norm(san);
+                if (!target) return false;
+                const lists = document.querySelectorAll("wc-simple-move-list, .vertical-move-list, [class*='move-list'], [class*='movelist']");
+                for (const list of lists) {
+                  const nodes = list.querySelectorAll(".node, .move-node, [class*='node'], [data-ply], .move");
+                  if (!nodes.length) continue;
+                  const last = nodes[nodes.length - 1];
+                  const txt = norm(last.textContent);
+                  if (txt === target) return true;
+                  // figurine notation: piece letter may be an icon, leaving e.g. "f3"
+                  if (txt === target.slice(1) && /^[KQRBN]/.test(target) && last.querySelector("[class*='piece'], [class*='figure'], span, svg, img")) return true;
+                }
+                return false;
+              } catch { return false; }
             };
           }
         }
@@ -300,6 +361,8 @@ export class SiteDetector {
       if (wrap.classList.contains("orientation-black")) return true;
       if (wrap.classList.contains("orientation-white")) return false;
     }
+    const hostEl = el.closest?.("wc-chess-board, chess-board") || (el.matches?.("wc-chess-board, chess-board") ? el : null);
+    if (hostEl?.classList?.contains("flipped")) return true;
     const coords = el.querySelectorAll("[class*='coord'], .file, .rank, text");
     for (const c of coords) {
       const t = (c.textContent || "").trim();

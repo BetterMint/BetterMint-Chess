@@ -71,7 +71,7 @@ export class Privacy {
     if (matchesHotkey(e, panic)) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.panic();
+      if (this.panicked) this.restore(); else this.panic();
       return;
     }
     const reveal = parseHotkey(this.settings.get("handbrain.revealHotkey"));
@@ -131,6 +131,24 @@ export class Privacy {
     try { window.speechSynthesis.cancel(); } catch {}
     if (this.settings.get("priv.panicWipes")) this.wipe();
     this.scrub();
+    this._onKey = (e) => this._handleKey(e);
+    window.addEventListener("keydown", this._onKey, true);
+    this._listeners.push(() => window.removeEventListener("keydown", this._onKey, true));
+  }
+
+  restore() {
+    if (!this.panicked) return;
+    this.panicked = false;
+    this.hidden = false;
+    this.install();
+    const app = this.app;
+    app.log("[priv] panic cleared - restoring");
+    try { app.detector.result = null; app.detector.start(); } catch {}
+    try { clearInterval(app._fenTimer); app._startFenWatcher(); } catch {}
+    try { app._enginesStarted = false; } catch {}
+    if (app.boardCandidate) {
+      try { app._onBoardFound({ host: app.hostKind, board: app.boardCandidate }); } catch {}
+    }
   }
 
   async wipe() {

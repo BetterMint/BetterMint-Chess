@@ -204,6 +204,14 @@ export class Humanizer {
     };
     const evt = type.startsWith("pointer") ? new PointerEvent(type, opts) : new MouseEvent(type, opts);
     el.dispatchEvent(evt);
+    if (type === "pointerup" || type === "pointercancel") {
+      let n = el;
+      let hops = 0;
+      while (n && hops++ < 6) {
+        try { if (n.hasPointerCapture?.(1)) n.releasePointerCapture(1); } catch {}
+        n = n.parentElement;
+      }
+    }
   }
 
   _bezierPath(a, b, steps) {
