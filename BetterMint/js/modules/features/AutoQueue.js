@@ -1,8 +1,8 @@
 const SITE_BUTTONS = {
   chesscom: {
-    rematch: ["button[data-cy='rematch-button']", ".game-over-buttons-rematch", "button.rematch-button"],
+    rematch: ["button[data-cy='rematch-button']", "[data-cy*='rematch' i]", "button[class*='rematch' i]", ".game-over-buttons-rematch", "button.rematch-button"],
     newGame: ["button[data-cy='new-game-button']", ".game-over-buttons-new-game", "button.new-game-button", ".game-over-new-game-button-component", "button[data-cy='new-game']", "button[class*='new-game']", "button[class*='play-again']", "a[class*='new-game']", "button[class*='next-game']"],
-    gameOver: [".game-over-modal", ".board-modal-container", "[data-cy='game-over-modal']", ".game-over-modal-shell-container", ".board-modal-component"],
+    gameOver: [".game-over-modal", ".board-modal-container", "[data-cy='game-over-modal']", ".game-over-modal-shell-container", ".game-over-modal-shell-buttons", ".game-over-controls", ".game-over-component", ".board-modal-component"],
   },
   lichess: {
     rematch: [".rematch button", "button.rematch", ".follow-up .rematch"],
@@ -16,9 +16,19 @@ const SITE_BUTTONS = {
   },
 };
 
-const BUTTON_TEXT_RX = /rematch|new game|play again|new opponent|next game|next match|start game|start match|start playing|new\s+\d+\s*(min|sec|bot|game|match)?|new bot|play\s*\d+|rematch\s*\?/i;
-const NEW_GAME_TEXT_RX = /new\s+\d+\s*(min|sec|bot|game|match)?|new game|play again|new opponent|next game|next match|start game|start match|start playing|new bot|play\s*\d+/i;
-const REMATCH_TEXT_RX = /rematch|new opponent/i;
+// chess.com renders these buttons from a generic component that takes a
+// translated label and no per-button class, so matching English words only
+// works on an English account. The stems below cover the Latin-script
+// translations; the time control pattern covers every language at once,
+// because "Nova 3 min", "Nueva 3 min" and "New 3 min" all carry the digits
+// and the unit.
+const REMATCH_WORDS = "rematch|revanch|revanche|rivincita|rewan|r[oö]van|he[rv]kansing|реванш|再戦|再来|재대결";
+const NEW_GAME_WORDS = "new\\s+game|nova\\s+partida|nova\\s+jogo|nueva\\s+partida|nuevo\\s+juego|nouvelle\\s+partie|neues\\s+spiel|nuova\\s+partita|nowa\\s+gra|yeni\\s+oyun|nieuw\\s+spel|ny\\s+match|новая\\s+игра|新しいゲーム|新对局|새\\s*게임|play\\s+again|new\\s+opponent|next\\s+game|next\\s+match|start\\s+game|start\\s+match|start\\s+playing|new\\s+bot";
+const TIME_CONTROL_RX = /\b\d+\s*(min|mins|minutos?|minuten|minuti|minutes?|sec|secs|seg|segundos?|sekunden|hr|hour|hora)\b/i;
+
+const BUTTON_TEXT_RX = new RegExp(`${REMATCH_WORDS}|${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
+const NEW_GAME_TEXT_RX = new RegExp(`${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
+const REMATCH_TEXT_RX = new RegExp(`${REMATCH_WORDS}|new\\s+opponent`, "i");
 
 // Containers that genuinely belong to a rematch offer. The accept pass is
 // scoped to these so we can never click an unrelated "Accept" button such as
@@ -27,7 +37,8 @@ const REMATCH_SCOPES = [
   "[class*='rematch' i]", "[data-cy*='rematch' i]", ".follow-up",
   ".game-over-modal", "[class*='game-over' i]", ".game-over-modal-shell-container", ".board-modal-component", ".quick-analysis-wrapper",
 ];
-const ACCEPT_TEXT_RX = /^(accept|yes|rematch|ok)\b/i;
+const ACCEPT_TEXT_RX = /^(accept|yes|ok|rematch|aceitar|aceptar|accepter|accetta|annehmen|kabul|sim|s[íi]|oui|ja|evet|принять|да)\b/i;
+const DECLINE_TEXT_RX = /decline|cancel|recusar|rejeitar|rechazar|cancelar|refuser|annuler|ablehnen|abbrechen|rifiuta|annulla|iptal|reddet|отклонить|отмена|weiger|^n[oãa]o?\b/i;
 
 const EXCLUDE_CONTAINERS = [
   ".game-buttons-container-component",
@@ -161,7 +172,7 @@ export class AutoQueue {
         for (const btn of scope.querySelectorAll("button, a.btn, [role='button']")) {
           if (!this._visible(btn)) continue;
           if (_isExcluded(btn)) continue;
-          if (/decline|cancel|no\b/i.test(btn.textContent || "")) continue;
+          if (DECLINE_TEXT_RX.test(btn.textContent || "")) continue;
           if (ACCEPT_TEXT_RX.test((btn.textContent || "").trim())) return btn;
         }
       }
@@ -170,7 +181,7 @@ export class AutoQueue {
   }
 
   _findButton(selectors, opts = {}) {
-    const { isNewGame = false, scope = null } = opts;
+    const { isNewGame = false, scope = null, loose = false } = opts;
     const root = scope || document;
     for (const s of selectors) {
       for (const el of root.querySelectorAll(s)) {
@@ -188,6 +199,7 @@ export class AutoQueue {
       if (isNewGame) {
         if (REMATCH_TEXT_RX.test(text)) continue;
         if (NEW_GAME_TEXT_RX.test(text)) return btn;
+        if (loose && TIME_CONTROL_RX.test(text)) return btn;
       } else {
         if (BUTTON_TEXT_RX.test(text)) return btn;
       }
@@ -200,7 +212,7 @@ export class AutoQueue {
     for (const gs of gameOverSelectors) {
       for (const scope of document.querySelectorAll(gs)) {
         if (!this._visible(scope)) continue;
-        const target = this._findButton(sel.newGame, { isNewGame: true, scope });
+        const target = this._findButton(sel.newGame, { isNewGame: true, scope, loose: true });
         if (target) return target;
       }
     }
