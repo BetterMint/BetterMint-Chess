@@ -295,9 +295,10 @@ export const SettingsSchema = [
   {
     category: "autoqueue", label: "Auto Queue",
     items: [
-      { key: "queue.enabled", label: "Auto queue enabled", type: "bool", def: false, desc: "Automatically accept rematches / start new games" },
-      { key: "queue.rematch", label: "Auto-accept rematch", type: "bool", def: true },
-      { key: "queue.newGame", label: "Auto new game after end", type: "bool", def: false },
+      { key: "queue.enabled", label: "Auto queue enabled", type: "bool", def: false, desc: "Automatically continue to the next game when one ends" },
+      { key: "queue.newGame", label: "Queue a new game when one ends", type: "bool", def: true, desc: "Clicks the new game button in the game-over dialog, which is what puts you back in the pool" },
+      { key: "queue.rematch", label: "Accept rematch offers", type: "bool", def: true, desc: "Only accepts a rematch the opponent has offered you. It never offers one." },
+      { key: "queue.offerRematch", label: "Offer a rematch instead of queueing", type: "bool", def: false, desc: "Clicks Rematch to challenge the same opponent again. They have to accept, so nothing starts until they do." },
       { key: "queue.delayMs", label: "Queue click delay (ms)", type: "range", def: 2500, min: 500, max: 15000, step: 100 },
       { key: "queue.delayVarianceMs", label: "Delay variance (ms)", type: "range", def: 1500, min: 0, max: 8000, step: 100 },
       { key: "queue.onlyWon", label: "Only queue after a win", type: "bool", def: false },

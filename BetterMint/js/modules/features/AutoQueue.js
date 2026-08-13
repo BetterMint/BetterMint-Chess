@@ -26,6 +26,13 @@ const REMATCH_WORDS = "rematch|revanch|revanche|rivincita|rewan|r[oö]van|he[rv]
 const NEW_GAME_WORDS = "new\\s+game|nova\\s+partida|nova\\s+jogo|nueva\\s+partida|nuevo\\s+juego|nouvelle\\s+partie|neues\\s+spiel|nuova\\s+partita|nowa\\s+gra|yeni\\s+oyun|nieuw\\s+spel|ny\\s+match|новая\\s+игра|新しいゲーム|新对局|새\\s*게임|play\\s+again|new\\s+opponent|next\\s+game|next\\s+match|start\\s+game|start\\s+match|start\\s+playing|new\\s+bot";
 const TIME_CONTROL_RX = /\b\d+\s*(min|mins|minutos?|minuten|minuti|minutes?|sec|secs|seg|segundos?|sekunden|hr|hour|hora)\b/i;
 
+// The result banner is translated too, so "Você ganhou!" never matched the
+// English-only test and anyone playing with "only queue after a win" was
+// never allowed to queue.
+const WON_TEXT_RX = /you won|you win|victory|won by|ganhou|ganhaste|venceu|venceste|ganaste|has ganado|vous avez gagn|gagn[ée]|gewonnen|hai vinto|vittoria|wygra[lł]|kazand|вы победили|победа|勝(ち|利)|你赢了|승리/i;
+const LOST_TEXT_RX = /you lost|you lose|defeat|perdeu|perdeste|perdiste|has perdido|vous avez perdu|verloren|hai perso|sconfitta|przegra[lł]|kaybett|вы проиграли|поражение|負け|你输了|패배/i;
+const DRAW_TEXT_RX = /draw|stalemate|1\/2-1\/2|empate|empatou|tablas|[ée]galit[ée]|match nul|unentschieden|remise|patta|pareggio|remis|berabere|ничья|引き分け|和棋|무승부/i;
+
 const BUTTON_TEXT_RX = new RegExp(`${REMATCH_WORDS}|${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
 const NEW_GAME_TEXT_RX = new RegExp(`${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
 const REMATCH_TEXT_RX = new RegExp(`${REMATCH_WORDS}|new\\s+opponent`, "i");
@@ -101,9 +108,10 @@ export class AutoQueue {
       if (!this._gameOverVisible()) this._fired = false;
       return;
     }
-    const canRematch = !!this.settings.get("queue.rematch");
+    const canAccept = !!this.settings.get("queue.rematch");
+    const canOffer = !!this.settings.get("queue.offerRematch");
     const canNewGame = !!this.settings.get("queue.newGame");
-    if (!canRematch && !canNewGame) {
+    if (!canAccept && !canOffer && !canNewGame) {
       if (!this._warnedDeadConfig) {
         this._warnedDeadConfig = true;
         this.onNothingEnabled?.();
@@ -118,13 +126,13 @@ export class AutoQueue {
     const sel = SITE_BUTTONS[this.hostKind] || SITE_BUTTONS.generic;
 
     let target = null;
-    if (canRematch) {
+    if (canAccept) {
       target = this._findAcceptRematch();
       if (target && wantWinOnly && result && result !== "won") target = null;
     }
     if (!target && wantWinOnly && result !== "won") return;
 
-    if (!target && canRematch) target = this._findButton(sel.rematch);
+    if (!target && canOffer) target = this._findButton(sel.rematch);
     if (!target && canNewGame) target = this._findNewGameButton(sel);
     if (!target) return;
 
@@ -150,9 +158,9 @@ export class AutoQueue {
   _readResult() {
     const sources = document.querySelectorAll(".game-over-modal, .board-modal-container, .game-over-modal-shell-container, .board-modal-component, .result-wrap, .result, [class*='game-result'], [class*='gameover'], [class*='game-over'], [class*='post-game'], .status");
     const text = [...sources].map((el) => el.textContent).join(" ").toLowerCase();
-    if (/you won|victory|won by|1-0/i.test(text)) return "won";
-    if (/you lost|defeat|0-1/i.test(text)) return "lost";
-    if (/draw|stalemate|1\/2-1\/2/i.test(text)) return "draw";
+    if (WON_TEXT_RX.test(text)) return "won";
+    if (LOST_TEXT_RX.test(text)) return "lost";
+    if (DRAW_TEXT_RX.test(text)) return "draw";
     return null;
   }
 

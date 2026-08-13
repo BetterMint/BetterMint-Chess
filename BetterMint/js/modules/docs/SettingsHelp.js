@@ -149,8 +149,9 @@ export const SettingsHelp = {
 
   // ---------------- auto queue ----------------
   "queue.enabled": "Automatically continue to the next game when one finishes.",
-  "queue.rematch": "Accept or offer a rematch against the same opponent.",
-  "queue.newGame": "Start a fresh game from the lobby instead of a rematch.",
+  "queue.newGame": "Click the new game button when a game ends, which is what actually puts you back in the pool.",
+  "queue.rematch": "Accept a rematch the opponent has offered you. This never offers one on your behalf.",
+  "queue.offerRematch": "Challenge the same opponent again instead of queueing. They have to accept, so nothing starts until they do.",
   "queue.delayMs": "How long to wait after a game ends before queueing again. Instant requeues look automated.",
   "queue.delayVarianceMs": "Random variation added to the queue delay, so the timing is never identical twice.",
   "queue.onlyWon": "Only continue queueing while you are winning. Stops after a loss.",

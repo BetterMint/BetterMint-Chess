@@ -96,7 +96,7 @@ export class App {
     await this.scripts.init();
     this.autoQueue.start(this.hostKind);
     this.autoQueue.onQueue = ({ gamesQueued }) => this.toast(`Auto queue: next game requested (${gamesQueued})`);
-    this.autoQueue.onNothingEnabled = () => this.toast("Auto queue is on, but rematch and new game are both off in Settings \u2192 Auto Queue");
+    this.autoQueue.onNothingEnabled = () => this.toast("Auto queue is on, but new game, accept rematch and offer rematch are all off in Settings \u2192 Auto Queue");
     this._startFenWatcher();
     const adopted = () => {
       this._syncOverlayWindow();
