@@ -50,9 +50,12 @@ export class AutoQueue {
   constructor(settings) {
     this.settings = settings;
     this._observer = null;
+    this._poll = null;
     this._fired = false;
     this._gamesQueued = 0;
+    this._warnedDeadConfig = false;
     this.onQueue = null;
+    this.onNothingEnabled = null;
     this._lastResult = null;
   }
 
@@ -61,13 +64,20 @@ export class AutoQueue {
     this.hostKind = hostKind;
     this._observer = new MutationObserver(() => this._check());
     this._observer.observe(document.documentElement, { childList: true, subtree: true });
+    this._poll = setInterval(() => this._check(), 1200);
     this._check();
   }
 
   stop() {
     this._observer?.disconnect();
     this._observer = null;
+    clearInterval(this._poll);
+    this._poll = null;
     this._fired = false;
+  }
+
+  recheck() {
+    if (this._observer) this._check();
   }
 
   resetForNewGame() {
@@ -75,7 +85,21 @@ export class AutoQueue {
   }
 
   _check() {
-    if (!this.settings.get("queue.enabled") || this._fired) return;
+    if (!this.settings.get("queue.enabled")) return;
+    if (this._fired) {
+      if (!this._gameOverVisible()) this._fired = false;
+      return;
+    }
+    const canRematch = !!this.settings.get("queue.rematch");
+    const canNewGame = !!this.settings.get("queue.newGame");
+    if (!canRematch && !canNewGame) {
+      if (!this._warnedDeadConfig) {
+        this._warnedDeadConfig = true;
+        this.onNothingEnabled?.();
+      }
+      return;
+    }
+    this._warnedDeadConfig = false;
     const stopAfter = this.settings.get("queue.stopAfter");
     if (stopAfter > 0 && this._gamesQueued >= stopAfter) return;
     const wantWinOnly = this.settings.get("queue.onlyWon");
@@ -83,14 +107,14 @@ export class AutoQueue {
     const sel = SITE_BUTTONS[this.hostKind] || SITE_BUTTONS.generic;
 
     let target = null;
-    if (this.settings.get("queue.rematch")) {
+    if (canRematch) {
       target = this._findAcceptRematch();
       if (target && wantWinOnly && result && result !== "won") target = null;
     }
     if (!target && wantWinOnly && result !== "won") return;
 
-    if (!target && this.settings.get("queue.rematch")) target = this._findButton(sel.rematch);
-    if (!target && this.settings.get("queue.newGame")) target = this._findNewGameButton(sel);
+    if (!target && canRematch) target = this._findButton(sel.rematch);
+    if (!target && canNewGame) target = this._findNewGameButton(sel);
     if (!target) return;
 
     this._fired = true;
@@ -99,8 +123,17 @@ export class AutoQueue {
       target.click();
       this._gamesQueued++;
       this.onQueue?.({ gamesQueued: this._gamesQueued });
-      setTimeout(() => { this._fired = false; }, 4000);
     }, delay);
+  }
+
+  _gameOverVisible() {
+    const sel = SITE_BUTTONS[this.hostKind] || SITE_BUTTONS.generic;
+    for (const gs of sel.gameOver || []) {
+      for (const el of document.querySelectorAll(gs)) {
+        if (this._visible(el)) return true;
+      }
+    }
+    return false;
   }
 
   _readResult() {
