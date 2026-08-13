@@ -76,8 +76,19 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict):
+    out = dict(cfg)
+    for section in ("engines", "books", "tablebases"):
+        items = cfg.get(section) or []
+        if not items:
+            continue
+        out[section] = [
+            {**item, "path": portable_path(resolve_path(item["path"]))}
+            if isinstance(item, dict) and item.get("path")
+            else item
+            for item in items
+        ]
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2)
+        json.dump(out, f, indent=2)
 
 
 CONFIG = load_config()
@@ -434,12 +445,15 @@ async def api_download(key: str):
         "enabled": True,
         "options": {"Threads": 4, "Hash": 256},
     }
-    CONFIG.setdefault("engines", []).append(entry)
+    CONFIG["engines"] = [
+        e for e in CONFIG.get("engines", []) if e.get("name") != name
+    ]
+    CONFIG["engines"].append(entry)
     save_config(CONFIG)
     manager.load_from_config([entry])
-    await manager.get(name).start()
+    started = await manager.get(name).start()
     await broadcast("", None, extra={"type": "engines", "engines": manager.status_list()})
-    return {"ok": True, "name": name, "path": exe_path, "display": display}
+    return {"ok": True, "name": name, "path": exe_path, "display": display, "started": started}
 
 
 @app.post("/api/engine/{name}/toggle")

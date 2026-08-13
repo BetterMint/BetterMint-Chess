@@ -4,6 +4,8 @@
 
 **A universal chess analysis companion — multi-engine, book-aware, tablebase-backed, and undetectable by design.**
 
+  <a href="https://github.com/BetterMint/BetterMint-Chess/releases"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BetterMint/BetterMint/total?color=%2331c754&label=Downloads"></a>
+
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/bettermint)
 [![Version](https://img.shields.io/badge/version-3.0.0-7a5cff?style=for-the-badge)](#)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-4ade80?style=for-the-badge&logo=googlechrome&logoColor=white)](#)
@@ -146,7 +148,7 @@ It reports every enabled engine's best move, every book that answered, and any t
 This project is a collaborative effort made possible by:
 
 - **[thedemons](https://github.com/thedemons)** — Original creator
-- **[ProtonDev](https://github.com/ProtonDevBS)** — API docs & public API host
+- **[ProtonDev](https://github.com/ProtonDev-sys)** — API docs & public API host
 - **BetterMint** — Development and maintenance
 
 ---
