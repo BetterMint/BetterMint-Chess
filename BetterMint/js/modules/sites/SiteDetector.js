@@ -22,6 +22,7 @@ export class SiteDetector {
     this._failStreak = 0;
     this._stopped = false;
     this._lastUrl = location.href;
+    this._orientationObserver = null;
     this._scanInterval = null;
   }
 
@@ -56,6 +57,8 @@ export class SiteDetector {
   stop() {
     clearTimeout(this._rescanTimer);
     clearInterval(this._scanInterval);
+    this._orientationObserver?.disconnect();
+    this._orientationObserver = null;
     this._stopped = true;
   }
 
@@ -94,6 +97,8 @@ export class SiteDetector {
     if (!board) {
       if (prev) {
         this.result = null;
+        this._orientationObserver?.disconnect();
+        this._orientationObserver = null;
         this._emit("board-lost", {});
       }
       return;
@@ -101,6 +106,8 @@ export class SiteDetector {
 
     if (!prev) {
       this.result = { host: this._hostKind(), board, detectedAt: Date.now(), reason };
+      this.flippedNow(board);
+      this._watchOrientation(board);
       this._emit("board", this.result);
       return;
     }
@@ -109,7 +116,7 @@ export class SiteDetector {
       prev.board.rect = board.rect;
       prev.board.size = board.size;
       prev.board.score = board.score;
-      prev.board.flipped = board.flipped;
+      this._refreshOrientation();
       return;
     }
 
@@ -117,6 +124,8 @@ export class SiteDetector {
     const currentDead = !current || !document.contains(prev.board.el) || current.size < 50;
     if (currentDead || board.score > current.score + 5) {
       this.result = { host: this._hostKind(), board, detectedAt: Date.now(), reason: `${reason}-upgrade` };
+      this.flippedNow(board);
+      this._watchOrientation(board);
       this._emit("board", this.result);
     }
   }
@@ -199,6 +208,40 @@ export class SiteDetector {
     };
   }
 
+  flippedNow(candidate) {
+    if (!candidate?.el) return false;
+    let flipped = null;
+    try {
+      const v = candidate.strategies?.orientation?.();
+      if (typeof v === "boolean") flipped = v;
+    } catch {}
+    if (flipped === null) flipped = !!this._detectFlipped(candidate.el);
+    candidate.flipped = flipped;
+    return flipped;
+  }
+
+  _refreshOrientation() {
+    const candidate = this.result?.board;
+    if (!candidate) return;
+    const before = candidate.flipped;
+    const now = this.flippedNow(candidate);
+    if (now !== before) this._emit("orientation", { flipped: now });
+  }
+
+  _watchOrientation(candidate) {
+    this._orientationObserver?.disconnect();
+    this._orientationObserver = null;
+    if (!candidate?.el) return;
+    const targets = [candidate.el];
+    const wrap = candidate.el.closest?.(".cg-wrap") || candidate.el.querySelector?.(".cg-wrap");
+    if (wrap && wrap !== candidate.el) targets.push(wrap);
+    try {
+      const obs = new MutationObserver(() => this._refreshOrientation());
+      for (const t of targets) obs.observe(t, { attributes: true, attributeFilter: ["class"] });
+      this._orientationObserver = obs;
+    } catch {}
+  }
+
   _detectWebComponents() {
     const out = [];
     const selectors = ["wc-chess-board", "chess-board", "cg-board", "cg-container", "chessboard", "l-chess-board"];
@@ -232,6 +275,14 @@ export class SiteDetector {
               } catch { return null; }
             };
           }
+          if (typeof el.game.getOptions === "function") {
+            c.strategies.orientation = () => {
+              try {
+                const o = el.game.getOptions();
+                return typeof o?.flipped === "boolean" ? o.flipped : null;
+              } catch { return null; }
+            };
+          }
           if (this._hostKind() === "chesscom") {
             // el.game.move() applies the move to chess.com's local game object
             // but never submits it through their live pipeline - the server,
@@ -261,6 +312,15 @@ export class SiteDetector {
         if (sel === "cg-container" || el.querySelector("cg-board")) {
           c.score += 25;
           c.strategies.pieceLayer = this._makePieceLayerReader(el);
+          c.strategies.orientation = () => {
+            try {
+              const wrap = el.closest(".cg-wrap") || el.querySelector(".cg-wrap");
+              if (!wrap) return null;
+              if (wrap.classList.contains("orientation-black")) return true;
+              if (wrap.classList.contains("orientation-white")) return false;
+              return null;
+            } catch { return null; }
+          };
           // Lichess exposes no playing-as API, so board orientation was being
           // used as a guess. Inside a real game lichess always orients the
           // board to the player's own colour, which makes it authoritative -
