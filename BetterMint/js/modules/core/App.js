@@ -100,6 +100,8 @@ export class App {
     this._applySettings();
     await this.scripts.init();
     this.autoQueue.start(this.hostKind);
+    this.autoQueue.onQueue = ({ gamesQueued }) => this.toast(`Auto queue: next game requested (${gamesQueued})`);
+    this.autoQueue.onNothingEnabled = () => this.toast("Auto queue is on, but new game, accept rematch and offer rematch are all off in Settings \u2192 Auto Queue");
     this._startFenWatcher();
     const adopted = () => {
       this._syncOverlayWindow();
@@ -1483,6 +1485,7 @@ export class App {
     if (extEnabled && !this.overlayWindow.isOpen) this.overlayWindow.open();
     if (!extEnabled && this.overlayWindow.isOpen) this.overlayWindow.close();
     if (this.overlayWindow.isOpen) this.overlayWindow.refreshTheme();
+    this.autoQueue.recheck();
     if (!first) this.hud.flashSync();
   }
 

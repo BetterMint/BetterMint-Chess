@@ -1,8 +1,8 @@
 const SITE_BUTTONS = {
   chesscom: {
-    rematch: ["button[data-cy='rematch-button']", ".game-over-buttons-rematch", "button.rematch-button"],
+    rematch: ["button[data-cy='rematch-button']", "[data-cy*='rematch' i]", "button[class*='rematch' i]", ".game-over-buttons-rematch", "button.rematch-button"],
     newGame: ["button[data-cy='new-game-button']", ".game-over-buttons-new-game", "button.new-game-button", ".game-over-new-game-button-component", "button[data-cy='new-game']", "button[class*='new-game']", "button[class*='play-again']", "a[class*='new-game']", "button[class*='next-game']"],
-    gameOver: [".game-over-modal", ".board-modal-container", "[data-cy='game-over-modal']", ".game-over-modal-shell-container", ".board-modal-component"],
+    gameOver: [".game-over-modal", ".board-modal-container", "[data-cy='game-over-modal']", ".game-over-modal-shell-container", ".game-over-modal-shell-buttons", ".game-over-controls", ".game-over-component", ".board-modal-component"],
   },
   lichess: {
     rematch: [".rematch button", "button.rematch", ".follow-up .rematch"],
@@ -16,9 +16,26 @@ const SITE_BUTTONS = {
   },
 };
 
-const BUTTON_TEXT_RX = /rematch|new game|play again|new opponent|next game|next match|start game|start match|start playing|new\s+\d+\s*(min|sec|bot|game|match)?|new bot|play\s*\d+|rematch\s*\?/i;
-const NEW_GAME_TEXT_RX = /new\s+\d+\s*(min|sec|bot|game|match)?|new game|play again|new opponent|next game|next match|start game|start match|start playing|new bot|play\s*\d+/i;
-const REMATCH_TEXT_RX = /rematch|new opponent/i;
+// chess.com renders these buttons from a generic component that takes a
+// translated label and no per-button class, so matching English words only
+// works on an English account. The stems below cover the Latin-script
+// translations; the time control pattern covers every language at once,
+// because "Nova 3 min", "Nueva 3 min" and "New 3 min" all carry the digits
+// and the unit.
+const REMATCH_WORDS = "rematch|revanch|revanche|rivincita|rewan|r[oö]van|he[rv]kansing|реванш|再戦|再来|재대결";
+const NEW_GAME_WORDS = "new\\s+game|nova\\s+partida|nova\\s+jogo|nueva\\s+partida|nuevo\\s+juego|nouvelle\\s+partie|neues\\s+spiel|nuova\\s+partita|nowa\\s+gra|yeni\\s+oyun|nieuw\\s+spel|ny\\s+match|новая\\s+игра|新しいゲーム|新对局|새\\s*게임|play\\s+again|new\\s+opponent|next\\s+game|next\\s+match|start\\s+game|start\\s+match|start\\s+playing|new\\s+bot";
+const TIME_CONTROL_RX = /\b\d+\s*(min|mins|minutos?|minuten|minuti|minutes?|sec|secs|seg|segundos?|sekunden|hr|hour|hora)\b/i;
+
+// The result banner is translated too, so "Você ganhou!" never matched the
+// English-only test and anyone playing with "only queue after a win" was
+// never allowed to queue.
+const WON_TEXT_RX = /you won|you win|victory|won by|ganhou|ganhaste|venceu|venceste|ganaste|has ganado|vous avez gagn|gagn[ée]|gewonnen|hai vinto|vittoria|wygra[lł]|kazand|вы победили|победа|勝(ち|利)|你赢了|승리/i;
+const LOST_TEXT_RX = /you lost|you lose|defeat|perdeu|perdeste|perdiste|has perdido|vous avez perdu|verloren|hai perso|sconfitta|przegra[lł]|kaybett|вы проиграли|поражение|負け|你输了|패배/i;
+const DRAW_TEXT_RX = /draw|stalemate|1\/2-1\/2|empate|empatou|tablas|[ée]galit[ée]|match nul|unentschieden|remise|patta|pareggio|remis|berabere|ничья|引き分け|和棋|무승부/i;
+
+const BUTTON_TEXT_RX = new RegExp(`${REMATCH_WORDS}|${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
+const NEW_GAME_TEXT_RX = new RegExp(`${NEW_GAME_WORDS}|new\\s+\\d+\\s*(min|sec|bot|game|match)?|play\\s*\\d+`, "i");
+const REMATCH_TEXT_RX = new RegExp(`${REMATCH_WORDS}|new\\s+opponent`, "i");
 
 // Containers that genuinely belong to a rematch offer. The accept pass is
 // scoped to these so we can never click an unrelated "Accept" button such as
@@ -27,7 +44,8 @@ const REMATCH_SCOPES = [
   "[class*='rematch' i]", "[data-cy*='rematch' i]", ".follow-up",
   ".game-over-modal", "[class*='game-over' i]", ".game-over-modal-shell-container", ".board-modal-component", ".quick-analysis-wrapper",
 ];
-const ACCEPT_TEXT_RX = /^(accept|yes|rematch|ok)\b/i;
+const ACCEPT_TEXT_RX = /^(accept|yes|ok|rematch|aceitar|aceptar|accepter|accetta|annehmen|kabul|sim|s[íi]|oui|ja|evet|принять|да)\b/i;
+const DECLINE_TEXT_RX = /decline|cancel|recusar|rejeitar|rechazar|cancelar|refuser|annuler|ablehnen|abbrechen|rifiuta|annulla|iptal|reddet|отклонить|отмена|weiger|^n[oãa]o?\b/i;
 
 const EXCLUDE_CONTAINERS = [
   ".game-buttons-container-component",
@@ -50,9 +68,12 @@ export class AutoQueue {
   constructor(settings) {
     this.settings = settings;
     this._observer = null;
+    this._poll = null;
     this._fired = false;
     this._gamesQueued = 0;
+    this._warnedDeadConfig = false;
     this.onQueue = null;
+    this.onNothingEnabled = null;
     this._lastResult = null;
   }
 
@@ -61,13 +82,20 @@ export class AutoQueue {
     this.hostKind = hostKind;
     this._observer = new MutationObserver(() => this._check());
     this._observer.observe(document.documentElement, { childList: true, subtree: true });
+    this._poll = setInterval(() => this._check(), 1200);
     this._check();
   }
 
   stop() {
     this._observer?.disconnect();
     this._observer = null;
+    clearInterval(this._poll);
+    this._poll = null;
     this._fired = false;
+  }
+
+  recheck() {
+    if (this._observer) this._check();
   }
 
   resetForNewGame() {
@@ -75,7 +103,22 @@ export class AutoQueue {
   }
 
   _check() {
-    if (!this.settings.get("queue.enabled") || this._fired) return;
+    if (!this.settings.get("queue.enabled")) return;
+    if (this._fired) {
+      if (!this._gameOverVisible()) this._fired = false;
+      return;
+    }
+    const canAccept = !!this.settings.get("queue.rematch");
+    const canOffer = !!this.settings.get("queue.offerRematch");
+    const canNewGame = !!this.settings.get("queue.newGame");
+    if (!canAccept && !canOffer && !canNewGame) {
+      if (!this._warnedDeadConfig) {
+        this._warnedDeadConfig = true;
+        this.onNothingEnabled?.();
+      }
+      return;
+    }
+    this._warnedDeadConfig = false;
     const stopAfter = this.settings.get("queue.stopAfter");
     if (stopAfter > 0 && this._gamesQueued >= stopAfter) return;
     const wantWinOnly = this.settings.get("queue.onlyWon");
@@ -83,14 +126,14 @@ export class AutoQueue {
     const sel = SITE_BUTTONS[this.hostKind] || SITE_BUTTONS.generic;
 
     let target = null;
-    if (this.settings.get("queue.rematch")) {
+    if (canAccept) {
       target = this._findAcceptRematch();
       if (target && wantWinOnly && result && result !== "won") target = null;
     }
     if (!target && wantWinOnly && result !== "won") return;
 
-    if (!target && this.settings.get("queue.rematch")) target = this._findButton(sel.rematch);
-    if (!target && this.settings.get("queue.newGame")) target = this._findNewGameButton(sel);
+    if (!target && canOffer) target = this._findButton(sel.rematch);
+    if (!target && canNewGame) target = this._findNewGameButton(sel);
     if (!target) return;
 
     this._fired = true;
@@ -99,16 +142,25 @@ export class AutoQueue {
       target.click();
       this._gamesQueued++;
       this.onQueue?.({ gamesQueued: this._gamesQueued });
-      setTimeout(() => { this._fired = false; }, 4000);
     }, delay);
+  }
+
+  _gameOverVisible() {
+    const sel = SITE_BUTTONS[this.hostKind] || SITE_BUTTONS.generic;
+    for (const gs of sel.gameOver || []) {
+      for (const el of document.querySelectorAll(gs)) {
+        if (this._visible(el)) return true;
+      }
+    }
+    return false;
   }
 
   _readResult() {
     const sources = document.querySelectorAll(".game-over-modal, .board-modal-container, .game-over-modal-shell-container, .board-modal-component, .result-wrap, .result, [class*='game-result'], [class*='gameover'], [class*='game-over'], [class*='post-game'], .status");
     const text = [...sources].map((el) => el.textContent).join(" ").toLowerCase();
-    if (/you won|victory|won by|1-0/i.test(text)) return "won";
-    if (/you lost|defeat|0-1/i.test(text)) return "lost";
-    if (/draw|stalemate|1\/2-1\/2/i.test(text)) return "draw";
+    if (WON_TEXT_RX.test(text)) return "won";
+    if (LOST_TEXT_RX.test(text)) return "lost";
+    if (DRAW_TEXT_RX.test(text)) return "draw";
     return null;
   }
 
@@ -128,7 +180,7 @@ export class AutoQueue {
         for (const btn of scope.querySelectorAll("button, a.btn, [role='button']")) {
           if (!this._visible(btn)) continue;
           if (_isExcluded(btn)) continue;
-          if (/decline|cancel|no\b/i.test(btn.textContent || "")) continue;
+          if (DECLINE_TEXT_RX.test(btn.textContent || "")) continue;
           if (ACCEPT_TEXT_RX.test((btn.textContent || "").trim())) return btn;
         }
       }
@@ -137,7 +189,7 @@ export class AutoQueue {
   }
 
   _findButton(selectors, opts = {}) {
-    const { isNewGame = false, scope = null } = opts;
+    const { isNewGame = false, scope = null, loose = false } = opts;
     const root = scope || document;
     for (const s of selectors) {
       for (const el of root.querySelectorAll(s)) {
@@ -155,6 +207,7 @@ export class AutoQueue {
       if (isNewGame) {
         if (REMATCH_TEXT_RX.test(text)) continue;
         if (NEW_GAME_TEXT_RX.test(text)) return btn;
+        if (loose && TIME_CONTROL_RX.test(text)) return btn;
       } else {
         if (BUTTON_TEXT_RX.test(text)) return btn;
       }
@@ -167,7 +220,7 @@ export class AutoQueue {
     for (const gs of gameOverSelectors) {
       for (const scope of document.querySelectorAll(gs)) {
         if (!this._visible(scope)) continue;
-        const target = this._findButton(sel.newGame, { isNewGame: true, scope });
+        const target = this._findButton(sel.newGame, { isNewGame: true, scope, loose: true });
         if (target) return target;
       }
     }
