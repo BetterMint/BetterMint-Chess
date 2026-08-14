@@ -21,10 +21,16 @@
       this._el = boardEl;
       this.fen = START;
       this._playingAs = 1;
+      this._options = { flipped: boardEl.classList.contains("flipped") };
     }
     getFEN() { return this.fen; }
     getPlayingAs() { return this._playingAs; }
     getTurn() { return this.fen.includes(" w ") ? 1 : 2; }
+    getOptions() { return { ...this._options }; }
+    setOptions(o) {
+      Object.assign(this._options, o);
+      this._el.classList.toggle("flipped", !!this._options.flipped);
+    }
     move(m) {
       if (this.fen === START && m.from === "e2" && m.to === "e4") this.fen = AFTER_E4;
       document.getElementById("moved").textContent = "apiMove:" + m.from + m.to + (m.promotion || "");
@@ -41,7 +47,8 @@
   customElements.define("wc-chess-board", WCChessBoard);
 
   document.getElementById("flip").addEventListener("click", () => {
-    document.getElementById("board").classList.toggle("flipped");
+    const board = document.getElementById("board");
+    board.game.setOptions({ flipped: !board.game.getOptions().flipped });
   });
 </script>
 <script src="../dist/inject.js"></script>
