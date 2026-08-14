@@ -117,6 +117,9 @@ class UciEngine {
     this.lastBestmove = null;
     this.ready = false;
     this._readyResolve = null;
+    this._searching = false;
+    this._idleWaiters = new Set();
+    this._analyzeSeq = 0;
     this.uciOptions = [];
     this.uciName = null;
   }
@@ -139,12 +142,44 @@ class UciEngine {
     if (line.startsWith("bestmove")) {
       const parts = line.split(" ");
       this.busy = false;
+      this._searching = false;
+      this._flushIdle();
       this.lastBestmove = parts[1] || null;
       this.manager._handleBestmove(this.name, parts[1], parts[3]);
     }
   }
 
-  async setOption(name, value) { this.send(`setoption name ${name} value ${value}`); }
+  _flushIdle() {
+    for (const resolve of [...this._idleWaiters]) resolve();
+    this._idleWaiters.clear();
+  }
+
+  _whenIdle(timeoutMs = 2000) {
+    if (!this._searching) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        this._idleWaiters.delete(finish);
+        resolve();
+      };
+      this._idleWaiters.add(finish);
+      setTimeout(finish, timeoutMs);
+    });
+  }
+
+  async _goIdle() {
+    if (!this._searching) return;
+    this.send("stop");
+    await this._whenIdle();
+    this._searching = false;
+  }
+
+  async setOption(name, value) {
+    await this._goIdle();
+    this.send(`setoption name ${name} value ${value}`);
+  }
 
   get linesWanted() {
     return this.lines > 0 ? this.lines : null;
@@ -152,21 +187,29 @@ class UciEngine {
 
   async analyze(fen, opts) {
     if (!this.alive) return;
+    const seq = ++this._analyzeSeq;
+    await this._goIdle();
+    if (seq !== this._analyzeSeq) return;
     this.busy = true;
     const mpv = this.linesWanted || opts.multipv;
     if (mpv && this.uciOptions.some((o) => o.name === "MultiPV")) {
-      await this.setOption("MultiPV", clampToOption(this.uciOptions, "MultiPV", mpv));
+      this.send(`setoption name MultiPV value ${clampToOption(this.uciOptions, "MultiPV", mpv)}`);
     }
-    this.send("stop");
     this.send(`position fen ${fen}`);
     const depth = this.maxDepth ? Math.min(opts.depth || 15, this.maxDepth) : (opts.depth || 15);
+    this._searching = true;
     if (opts.nodes) this.send(`go nodes ${opts.nodes}`);
     else if (opts.movetime) this.send(`go movetime ${opts.movetime}`);
     else this.send(`go depth ${depth}`);
   }
 
   async stop() { this.send("stop"); this.busy = false; }
-  async newGame() { this.send("ucinewgame"); this.send("isready"); }
+
+  async newGame() {
+    await this._goIdle();
+    this.send("ucinewgame");
+    this.send("isready");
+  }
 
   async _handshake(timeoutMs) {
     this.send("uci");
