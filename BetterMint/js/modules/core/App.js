@@ -79,6 +79,11 @@ export class App {
     this.settings.requestRaw("site.present", { host: this.hostKind }, 3000).catch(() => {});
     this.detector.on("board", (r) => this._onBoardFound(r));
     this.detector.on("board-lost", () => this._onBoardLost());
+    this.detector.on("orientation", ({ flipped }) => {
+      this.overlay.setFlipped(flipped);
+      this.hud.setFlipped(flipped);
+      this._syncOverlayWindow();
+    });
     this.detector.start();
 
     this.engineManager.attachBridge(this.settings);
@@ -340,12 +345,13 @@ export class App {
 
   _onBoardFound(result) {
     this.boardCandidate = result.board;
+    const flipped = this.detector.flippedNow(this.boardCandidate);
     this._ensureEnginesStarted();
     this.exploits.attach(result.host);
-    this.overlay.attach(this.boardCandidate.el, this.boardCandidate.flipped);
+    this.overlay.attach(this.boardCandidate.el, flipped);
     this.hud.mount();
     this.hud.refreshPosition();
-    this.hud.setFlipped(this.boardCandidate.flipped);
+    this.hud.setFlipped(flipped);
     this.events.emit("boardfound", { host: result.host });
 
     const adopted = () => {
@@ -510,7 +516,7 @@ export class App {
     if (!this.currentFen || !this.boardCandidate) return;
     const fen = this.currentFen;
 
-    this.overlay.setFlipped(this.boardCandidate.flipped);
+    this.overlay.setFlipped(this.detector.flippedNow(this.boardCandidate));
     this.hud.setFlipped(this.boardCandidate.flipped);
 
     const bookQuery = await this.bookManager.queryLines(fen);

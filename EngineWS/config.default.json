@@ -8,7 +8,7 @@
     {
       "name": "stockfish",
       "display": "Stockfish 13",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\stockfish_13_win_x64_avx2.exe",
+      "path": "engines & books/stockfish_13_win_x64_avx2.exe",
       "priority": 1,
       "enabled": true,
       "options": {
@@ -23,7 +23,7 @@
     {
       "name": "shredder",
       "display": "Deep Shredder 13",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\EngineDeepShredder13UCI.exe",
+      "path": "engines & books/EngineDeepShredder13UCI.exe",
       "priority": 2,
       "enabled": false,
       "options": {},
@@ -35,7 +35,7 @@
     {
       "name": "opental",
       "display": "OpenTal (x64 popcnt)",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\opental_x64popcnt.exe",
+      "path": "engines & books/opental_x64popcnt.exe",
       "priority": 3,
       "enabled": false,
       "options": {},
@@ -47,7 +47,7 @@
     {
       "name": "safrad",
       "display": "Safrad SDG 2.2",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\engines & books\\safrad_2.2.exe",
+      "path": "engines & books/safrad_2.2.exe",
       "priority": 4,
       "enabled": false,
       "options": {},
@@ -60,7 +60,7 @@
   "books": [
     {
       "name": "gm2001",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\bin\\gm2001.bin",
+      "path": "bin/gm2001.bin",
       "stage": "opening",
       "format": "polyglot",
       "weight": 1.0,
@@ -68,7 +68,7 @@
     },
     {
       "name": "komodo",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\bin\\komodo.bin",
+      "path": "bin/komodo.bin",
       "stage": "opening",
       "format": "polyglot",
       "weight": 1.0,
@@ -76,7 +76,7 @@
     },
     {
       "name": "ph-tal2",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\books\\ph-tal2.bin",
+      "path": "books/ph-tal2.bin",
       "stage": "opening",
       "format": "polyglot",
       "weight": 1.0,
@@ -84,7 +84,7 @@
     },
     {
       "name": "rodent",
-      "path": "C:\\Users\\Admin\\Downloads\\detectiontest\\BetterMint Project\\EngineWS\\books\\Rodent.bin",
+      "path": "books/Rodent.bin",
       "stage": "opening",
       "format": "polyglot",
       "weight": 1.0,
