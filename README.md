@@ -4,7 +4,7 @@
 
 **A universal chess analysis companion — multi-engine, book-aware, tablebase-backed, and undetectable by design.**
 
-  <a href="https://github.com/BetterMint/BetterMint-Chess/releases"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BetterMint/BetterMint/total?color=%2331c754&label=Downloads"></a>
+  <a href="https://github.com/BetterMint/BetterMint-Chess/releases"><img alt="Download BetterMint" src="https://img.shields.io/github/downloads/BetterMint/BetterMint-Chess/total?color=%2331c754&label=Downloads"></a>
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/bettermint)
 [![Version](https://img.shields.io/badge/version-3.0.0-7a5cff?style=for-the-badge)](#)
